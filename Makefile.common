@@ -6,7 +6,7 @@ UNAME := $(shell uname)
 
 ifneq ($(findstring MINGW,$(UNAME)),)
   PLATFORM := MINGW
-else  
+else
   ifneq ($(findstring CYGWIN,$(UNAME)),)
     PLATFORM := CYGWIN
   else
@@ -29,7 +29,7 @@ endif
 #ifeq ($(PLATFORM),LINUX)
 #  CFLAGS += -m32
 #endif
-  
+
 # Build tools
 # Make
 MAKE := make
@@ -91,7 +91,7 @@ MAKE_OPTS := --no-print-directory VERBOSE=$(VERBOSE) OPTIMIZE=$(OPTIMIZE) NODEBU
 CPPFLAGS = -pedantic $(INCLUDES) $(EXTERNAL_CFLAGS)
 
 # Except for Cygwin we want ANSI handling of headers
-ifneq ($(PLATFORM),CYGWIN) 
+ifneq ($(PLATFORM),CYGWIN)
   ifneq ($(PLATFORM),MINGW)
     CPPFLAGS += -ansi
   endif
@@ -147,7 +147,7 @@ endif
 INCLUDES = -I$(INC) $(EXTERNAL_INCS:%=-I%)
 
 ifeq ($(PLATFORM),MACOSX)
-  RPATH := 
+  RPATH :=
 else
   RPATH = $(EXTERNAL_LIBDIRS:%=-Wl,-rpath,%)
 endif
@@ -245,33 +245,40 @@ $(LIB)/%.$(SEXT):
 
 $(OBJ)/%.o: %.c
 	@echo "  ** Compiling  `basename $@`"
+	mkdir -p $(OBJ)
 	$V$(CC) -o $@ $< -c $(CFLAGS)
 
 $(OBJ)/%.o: %.cc
 	@echo "  ** Compiling  `basename $@`"
+	mkdir -p $(OBJ)
 	$V$(CXX) -o $@ $< -c $(CXXFLAGS)
 
 $(OBJ)/%_exe.o: %.cxx
 	@echo "  ** Compiling  `basename $@`"
+	mkdir -p $(OBJ)
 	$V$(CXX) -o $@ $< -c $(CXXFLAGS)
 
 $(DEP)/%.d: %.c
 	@echo " *** Creating   `basename $@`"
+	mkdir -p $(OBJ)
 	$V$(CDEP) $< $(CPPFLAGS) | sed 's,\($*\)\.o[ :]*,$(OBJ)/\1.o $@ : ,g' > $@
 	@[ `${FSIZE} $@` -gt 0 ] || (rm $@; false)
 
 $(DEP)/%.d: %.cc
 	@echo " *** Creating   `basename $@`"
+	mkdir -p $(OBJ)
 	$V$(CCDEP) $< $(CPPFLAGS) | sed 's,\($*\)\.o[ :]*,$(OBJ)/\1.o $@ : ,g' > $@
 	@[ `${FSIZE} $@` -gt 0 ] || (rm $@; false)
 
 $(DEP)/%_exe.d: %.cxx
 	@echo " *** Creating   `basename $@`"
+	mkdir -p $(OBJ)
 	$V$(CCDEP) $< $(CPPFLAGS) | sed 's,\($*\)\.o[ :]*,$(OBJ)/\1_exe.o $@ : ,g' > $@
 	@[ `${FSIZE} $@` -gt 0 ] || (rm $@; false)
 
 $(DEP)/%.hh.d: %.hh
 	@echo " *** Creating   `basename $@`"
+	mkdir -p $(OBJ)
 	$V$(CCDEP) -x c++ $< -g $(CPPFLAGS) | sed 's,\($*\)\.o[ :]*,$(INC)/\1.hh.gch $@ : ,g' > $@
 	@[ `${FSIZE} $@` -gt 0 ] || (rm $@; false)
 

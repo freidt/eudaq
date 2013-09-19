@@ -3,6 +3,10 @@
 *.so
 *.exe
 bin/
+logs/
+data/
+tmp/
+gui/Makefile_*
 
 # Explorer 1 specific
 *.pyc

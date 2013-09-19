@@ -3,3 +3,9 @@
 *.so
 *.exe
 bin/
+
+# Explorer 1 specific
+*.pyc
+
+# editor temp files
+*~

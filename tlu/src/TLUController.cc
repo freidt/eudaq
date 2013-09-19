@@ -125,9 +125,9 @@ namespace tlu {
 	std::cout << "Input voltage range [0, 1.0 V] " <<std::endl;
 	return 0;
       }
-      static const double vref = 0.5, vgain = 2.0;  
+      static const double vref = 0.5, vgain = 2.0;
       static const unsigned fullscale = 0x3ff;   // 12-bits
-      unsigned dac_orig = 0xb000 | ((unsigned(fullscale * ( voltage/ (vref * vgain))) & 0x3FFU) << 2); 
+      unsigned dac_orig = 0xb000 | ((unsigned(fullscale * ( voltage/ (vref * vgain))) & 0x3FFU) << 2);
 
       //repack the data
       unsigned dac_val = (dac_orig >> 8) | ((dac_orig & 0x00ff) << 8);
@@ -153,7 +153,7 @@ namespace tlu {
     m_amask(0),
     m_omask(0),
     m_ipsel(0xff),
-    m_handshakemode(0),
+    //    m_handshakemode(0),
     m_triggerint(0),
     m_inhibit(true),
     m_vetostatus(0),
@@ -268,11 +268,11 @@ namespace tlu {
     SetDUTMask(m_mask, false);
 
     // Reset pointers
-    WriteRegister(m_addr->TLU_RESET_REGISTER_ADDRESS, 
+    WriteRegister(m_addr->TLU_RESET_REGISTER_ADDRESS,
                   (1 << m_addr->TLU_TRIGGER_COUNTER_RESET_BIT)
-                  | (1 << m_addr->TLU_BUFFER_POINTER_RESET_BIT) 
-                  | (1 << m_addr->TLU_TRIGGER_FSM_RESET_BIT) 
-                  ); 
+                  | (1 << m_addr->TLU_BUFFER_POINTER_RESET_BIT)
+                  | (1 << m_addr->TLU_TRIGGER_FSM_RESET_BIT)
+                  );
 
     WriteRegister(m_addr->TLU_INTERNAL_TRIGGER_INTERVAL, m_triggerint);
 
@@ -307,7 +307,7 @@ namespace tlu {
 
 
   bool TLUController::SetupLVPower(int value ) {  // set LV-Out control voltage to a "value" (default 800 mV)
-    
+
     if(value < 250. || value > 900.)
     {
         std::cout << "TLU::SetupLVPower, the value of control voltage " << value << " mV is outside of allowed range [ 250 to 900 mV], skipping" << std::endl;
@@ -315,14 +315,14 @@ namespace tlu {
     else
     {
         SelectBus(m_addr->TLU_I2C_BUS_DISPLAY);
-        try 
+        try
         {
           WriteI2C16((AD5316_HW_ADDR << 2) | m_addr->TLU_I2C_BUS_PMT_DAC, 0xf,  pmt_dac_value(value/1000.) ); //      convert to V
         } catch (const eudaq::Exception &) {
           return false;
         }
     }
-    
+
     return true;
   }
 
@@ -338,7 +338,7 @@ namespace tlu {
       WriteI2C16((AD5316_HW_ADDR << 2) | m_addr->TLU_I2C_BUS_LEMO_DAC,
                  0xC, 0xf000 | (lemo_dac_value(0.4) << 2));
     } catch (const eudaq::Exception &) {
-      
+
       return false;
     }
     // Set high-z for TTL, 50-ohm for NIM
@@ -435,10 +435,10 @@ namespace tlu {
     }
   }
 
-  void TLUController::SetHandShakeMode(unsigned handshakemode) {
-    m_handshakemode = handshakemode;
-    if (m_addr) WriteRegister(m_addr->TLU_HANDSHAKE_MODE_ADDRESS, m_handshakemode);
-  }
+  //  void TLUController::SetHandShakeMode(unsigned handshakemode) {
+  //    m_handshakemode = handshakemode;
+  //    if (m_addr) WriteRegister(m_addr->TLU_HANDSHAKE_MODE_ADDRESS, m_handshakemode);
+  //  }
 
   void TLUController::SetTriggerInterval(unsigned millis) {
     m_triggerint = millis;
@@ -824,7 +824,7 @@ namespace tlu {
 
 
     // check to make sure that the first entry is zero ( which it should be unless something has slipped )
-    for (int tries = 0; tries < 4; ++tries) { 
+    for (int tries = 0; tries < 4; ++tries) {
       if (m_working_buffer[tries][0] !=0) {
         std::cout << "### Warning: m_working_buffer[buf][0] != 0. This shouldn't happen. buf = " << tries << std::endl;
         EUDAQ_WARN("### Warning: m_working_buffer[buf][0] != 0. This shouldn't happen. buf = " + eudaq::to_string(tries) );
@@ -881,7 +881,7 @@ namespace tlu {
         std::cout << "Timestamp data check error: timestamps not in chronological order: " << std::setw(8) <<  m_oldbuf[i-1]  << " >  " << m_oldbuf[i] << std::endl;
         num_uncorrectable_errors++;
 
-      } 
+      }
 
 
     }
@@ -890,7 +890,7 @@ namespace tlu {
 
     // usbtrace("BR", 0, m_working_buffer[3], m_addr->TLU_BUFFER_DEPTH, result);
 
-    m_uncorrectable_blockread_errors += num_uncorrectable_errors; 
+    m_uncorrectable_blockread_errors += num_uncorrectable_errors;
     m_correctable_blockread_errors += num_correctable_errors;
 
     // return the number of uncorrectable errors....
@@ -899,7 +899,7 @@ namespace tlu {
     if ( m_debug_level & TLU_DEBUG_BLOCKREAD ) {
       std::cout << "Debug - dumping block" << std::endl;
       PrintBlock( m_working_buffer , 4 , 4096 );
-    
+
       std::cout << "Debug - about to return num_errors ( num_correctable ) = " << num_errors << "  ( " << num_correctable_errors << " )" << std::endl;
     }
 
@@ -913,7 +913,7 @@ namespace tlu {
     // first read the 4 block again three times...
 
     static const unsigned buffer_offset = 2;
-    
+
     unsigned num_errors ;
 
     // unsigned long long buffer[12][4096]; // should be m_addr->TLU_BUFFER_DEPTH
@@ -947,10 +947,10 @@ namespace tlu {
 
 
     if ( pad ) {
-      std::cout <<"### Reading 2048 long-long words to pad ...."  << std::endl;   
+      std::cout <<"### Reading 2048 long-long words to pad ...."  << std::endl;
       result = ZestSC1ReadData(m_handle, padding_buffer, sizeof padding_buffer );
     } else {
-      std::cout <<"### No padding block read ...."  << std::endl;   
+      std::cout <<"### No padding block read ...."  << std::endl;
     }
 
 
@@ -1010,7 +1010,7 @@ namespace tlu {
 
     std::cout << "### Reading block after resetting pointer. (2nd time)" << std::endl;
     num_errors = ReadBlockRaw( entries , buffer_offset );
-    
+
     return num_errors;
 
   }

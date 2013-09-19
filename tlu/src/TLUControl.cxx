@@ -1,4 +1,4 @@
-include "tlu/TLUController.hh"
+#include "tlu/TLUController.hh"
 #include "tlu/USBTracer.hh"
 #include "eudaq/OptionParser.hh"
 #include "eudaq/Timer.hh"
@@ -108,7 +108,7 @@ int main(int /*argc*/, char ** argv) {
     TLU.SetFirmware(fname.Value());
     TLU.Configure();
     //TLU.FullReset();
-    TLU.SetHandShakeMode(hsmode.Value());
+    //TLU.SetHandShakeMode(hsmode.Value());
     TLU.SetTriggerInterval(trigg.Value());
     if (ipsel.NumItems() > (unsigned)TLU_LEMO_DUTS) ipsel.Resize(TLU_LEMO_DUTS);
     for (size_t i = 0; i < ipsel.NumItems(); ++i) {
@@ -128,7 +128,7 @@ int main(int /*argc*/, char ** argv) {
     TLU.SetEnableDUTVeto(enabledutveto.Value());
     TLU.SetupLVPower(lvpowervctrl.Value());
 
-    TLU.ResetTimestamp(); // also sets strobe running (if enabled) 
+    TLU.ResetTimestamp(); // also sets strobe running (if enabled)
 
     std::cout << "TLU Version = " << TLU.GetVersion() << "\n"
               << "TLU Serial number = " << eudaq::hexdec(TLU.GetSerialNumber(), 4) << "\n"

@@ -16,4 +16,10 @@ SlowControl.write_burst(s, 6039, 0x3, [ 0x1 ], False)
 
 time.sleep(1)
 
+# enable sync on the master (0x18 -> 0x1)
+#   and
+# activate the single-event readout mode (0x15 -> 0x4)
+# this bit has to be set to make trigger/timer unit running
+SlowControl.write_list(m, 6039, [ 0x18, 0x15 ], [ 0x1, 0x4 ], False)
+
 quit()

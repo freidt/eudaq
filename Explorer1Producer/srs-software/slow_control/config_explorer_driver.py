@@ -7,7 +7,7 @@ import SlowControl # slow control code
 m = SlowControl.SlowControl(0) # HLVDS FEC (master)
 s = SlowControl.SlowControl(1) # HLVDS ADC (slave)
 
-readout_start = 0x675
+readout_start = 0x674
 readout_end   = readout_start + (60*60+90*90)*2*4 # two memories per pixel, every fourth clock cycle is readout
 clk_high = 0x1
 clk_low  = 0x3

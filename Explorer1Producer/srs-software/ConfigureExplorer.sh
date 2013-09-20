@@ -4,7 +4,7 @@
 #
 # setup environment
 
-#source /afs/cern.ch/work/h/haugusti/private/EuDAQ/eudaq/Explorer1Producer/srs-software/env.sh
+
 #DATE=`date +%Y-%m-%d_%H-%M`
 RUN=`expr $(<../data/runnumber.dat) + 1`
 echo "$RUN"

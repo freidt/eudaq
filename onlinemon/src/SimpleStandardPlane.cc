@@ -31,7 +31,8 @@ SimpleStandardPlane::SimpleStandardPlane(const std::string & name, const int id,
   is_USBPIX=false;
   is_USBPIXI4=false;
   is_FORTIS=false;
-  is_UNKNOWN=true ; // per default we don't know this plane
+  is_EXPLORER=false;
+  is_UNKNOWN=true; // per default we don't know this plane
   isRotated=false;
   setPixelType(name); //set the pixel type
   _tlu_event=tlu_event;
@@ -52,6 +53,7 @@ SimpleStandardPlane::SimpleStandardPlane(const std::string & name, const int id)
   is_USBPIX=false;
   is_USBPIXI4=false;
   is_FORTIS=false;
+  is_EXPLORER=false;
   is_UNKNOWN=true ; // per default we don't know this plane
   isRotated=false;
   setPixelType(name); //set the pixel type
@@ -258,6 +260,12 @@ void SimpleStandardPlane::setPixelType(string name)
   else if(name=="USBPIXI4")
   {
     is_USBPIXI4=true;
+    is_UNKNOWN=false;
+    AnalogPixelType=true;
+  }
+  else if(name=="Explorer20x20" || name=="Explorer30x30")
+  {
+    is_EXPLORER=true;
     is_UNKNOWN=false;
     AnalogPixelType=true;
   }

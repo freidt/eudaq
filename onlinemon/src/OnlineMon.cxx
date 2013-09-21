@@ -308,14 +308,26 @@ void RootMonitor::OnEvent(const eudaq::StandardEvent & ev) {
 
 
           if (simpPlane.getAnalogPixelType()) //this is analog pixel, apply threshold
-          {
-            if (simpPlane.is_DEPFET)
-            {
+	  {
+	    if (simpPlane.is_DEPFET)
+	    {
               if ((hit.getTOT()< -20) || (hit.getTOT()>120))
               {
                 continue;
               }
             }
+	    if (simpPlane.is_EXPLORER)
+	    {
+	      if (lvl1!=0) continue;
+	      hit.setTOT((int)plane.GetPixel(index));
+	      //if (hit.getTOT() < -20 || hit.getTOT() > 20) {
+		//std::cout << hit.getTOT() << std::endl;
+	      //}
+	      if (hit.getTOT() < 20)
+	      {
+		continue;
+	      }
+	    }
             simpPlane.addHit(hit);
           }
           else //purely digital pixel

@@ -252,85 +252,87 @@ public:
 
 	fExplorer1->GetSingleEvent();			//Send GetSingleEvent to SRS| calls get_single_Event.py
 
-	//###################################################################################################
-	//Ansatz for alternative solution with changing number of frames
-	/*while(reading){
-	  while(  ( num_bytes_rcv = recvfrom( fExplorer1->get_SD(type) , data_packet , BUFFER , 0, NULL,NULL ) )  != 0){
-	  tot_byte_rcv+=num_byte_rcv;
-	  if(type==1) size_event+=num_byte_rcv;
-	  nof++;
-	  for( unsigned data_index = 0 ; data_index < num_byte_rcv ; data_index++ ){
-	  pack((type==0?bufferEvent_LVDS:bufferEvent_ADC),data_packet[data_index]);//array if not working
+	if (!stopping) {
+	  //###################################################################################################
+	  //Ansatz for alternative solution with changing number of frames
+	  /*while(reading){
+	    while(  ( num_bytes_rcv = recvfrom( fExplorer1->get_SD(type) , data_packet , BUFFER , 0, NULL,NULL ) )  != 0){
+	    tot_byte_rcv+=num_byte_rcv;
+	    if(type==1) size_event+=num_byte_rcv;
+	    nof++;
+	    for( unsigned data_index = 0 ; data_index < num_byte_rcv ; data_index++ ){
+	    pack((type==0?bufferEvent_LVDS:bufferEvent_ADC),data_packet[data_index]);//array if not working
+	    }
+	    }
+	    if(type==1) reading=false;
+	    type++;
+	    nof=0;
+	    tot_byte_rcv=0;
+	    size_event=0;
+	    }*/
+	  //##################################################################################################
+
+	  while(nof<2){		//read LVDS Event
+	    num_byte_rcv=recvfrom(sd0,data_packet,BUFFER,0,NULL,NULL);			//receive frame
+	    event_size+=num_byte_rcv;							//increase eventsize
+	    nof++;
+	    for( unsigned data_index = 0 ; data_index < num_byte_rcv ; data_index++ ){	//pack data to buffer
+	      pack(bufferEvent_LVDS,data_packet[data_index]);
+	    }
 	  }
+	  if(45!=bufferEvent_LVDS.size()){	//check if data size is correct
+	    printf("\n----------------------LVDS: Size not correct!------------------\n");
+	    bad=true;
 	  }
-	  if(type==1) reading=false;
-	  type++;
+	  event_size=0;		//reset values
 	  nof=0;
-	  tot_byte_rcv=0;
-	  size_event=0;
-	  }*/
-	//##################################################################################################
 
-	while(nof<2 && !stopping){		//read LVDS Event
-	  num_byte_rcv=recvfrom(sd0,data_packet,BUFFER,0,NULL,NULL);			//receive frame
-	  event_size+=num_byte_rcv;							//increase eventsize
-	  nof++;
-	  for( unsigned data_index = 0 ; data_index < num_byte_rcv ; data_index++ ){	//pack data to buffer
-	    pack(bufferEvent_LVDS,data_packet[data_index]);
+	  while(nof<17){		//read ADC event
+	    num_byte_rcv=recvfrom(sd1,data_packet,BUFFER,0,NULL,NULL);			//receive frame
+	    //very explicit cuts !!!!Data Format!!!!!
+	    if(num_byte_rcv!=9 && num_byte_rcv!=8844 && num_byte_rcv!=7962) bad=true;
+	    event_size+=num_byte_rcv;							//increase event size
+	    nof++;
+	    pack(bufferEvent_ADC,num_byte_rcv);	//add framlength befor the frame
+
+	    if(num_byte_rcv!=9 && data_packet[11]<min_frm_cnt) min_frm_cnt=data_packet[11];	//search for minimum framecnt
+
+	    for( unsigned data_index = 0 ; data_index < num_byte_rcv ; data_index++ ){	//pack data to buffer
+	      pack(bufferEvent_ADC,data_packet[data_index]);
+	    }
 	  }
-	}
-	if(45!=bufferEvent_LVDS.size() && !stopping){	//check if data size is correct
-	  printf("\n----------------------LVDS: Size not correct!------------------\n");
-	  bad=true;
-	}
-	event_size=0;		//reset values
-	nof=0;
-
-	while(nof<17 && !stopping){		//read ADC event
-	  num_byte_rcv=recvfrom(sd1,data_packet,BUFFER,0,NULL,NULL);			//receive frame
-	  //very explicit cuts !!!!Data Format!!!!!
-	  if(num_byte_rcv!=9 && num_byte_rcv!=8844 && num_byte_rcv!=7962) bad=true;
-	  event_size+=num_byte_rcv;							//increase event size
-	  nof++;
-	  pack(bufferEvent_ADC,num_byte_rcv);	//add framlength befor the frame
-
-	  if(num_byte_rcv!=9 && data_packet[11]<min_frm_cnt) min_frm_cnt=data_packet[11];	//search for minimum framecnt
-
-	  for( unsigned data_index = 0 ; data_index < num_byte_rcv ; data_index++ ){	//pack data to buffer
-	    pack(bufferEvent_ADC,data_packet[data_index]);
+	  if(min_frm_cnt!=0){	//check if event corrupt
+	    printf("\nFramecount not correct\nFrame 0 not contained\n");
+	    bad=true;
 	  }
-	}
-	if(min_frm_cnt!=0 && !stopping){	//check if event corrupt
-	  printf("\nFramecount not correct\nFrame 0 not contained\n");
-	  bad=true;
-	}
-	unsigned int TotalEventSize=bufferEvent_ADC.size();				//determine total event size framesize+header+data
-	pack(Length,TotalEventSize);							//create byte Vector with eventlength
-	bufferEvent_ADC.insert(bufferEvent_ADC.begin(),Length.begin(),Length.end());	//insert infront of the event data
+	  unsigned int TotalEventSize=bufferEvent_ADC.size();				//determine total event size framesize+header+data
+	  pack(Length,TotalEventSize);							//create byte Vector with eventlength
+	  bufferEvent_ADC.insert(bufferEvent_ADC.begin(),Length.begin(),Length.end());	//insert infront of the event data
 
-	if(140703!=bufferEvent_ADC.size() && !stopping){		//check buffer size
-	  printf("\n----------------------ADC: Size not correct!------------------\n");
-	  bad=true;
-	}
-	event_size=0;	//reset values
-	nof=0;
-	if (bad){	//discard bad events
-	  bad=false;
-	  printf("\nDiscard Event\n");
-	  continue;
-	}
+	  if(140703!=bufferEvent_ADC.size()){		//check buffer size
+	    printf("\n----------------------ADC: Size not correct!------------------\n");
+	    bad=true;
+	  }
+	  event_size=0;	//reset values
+	  nof=0;
+	  if (bad){	//discard bad events
+	    bad=false;
+	    printf("\nDiscard Event\n");
+	    continue;
+	  }
 
-	//Print number of Event
-	if(m_ev<10 || m_ev%100==0) printf("\n----------------------Event # %d------------------\n",m_ev);
-	// Create a RawDataEvent to contain the event data to be sent
-	eudaq::RawDataEvent ev(EVENT_TYPE, m_run, m_ev);
-	//ADD BLOCK  Event -->0
-	ev.AddBlock(0, bufferEvent_LVDS);
-	ev.AddBlock(1, bufferEvent_ADC);
-	// Send the event to the Data Collector
-	SendEvent(ev);
-	// Now increment the event number
-	m_ev++;
+	  //Print number of Event
+	  if(m_ev<10 || m_ev%100==0) printf("\n----------------------Event # %d------------------\n",m_ev);
+	  // Create a RawDataEvent to contain the event data to be sent
+	  eudaq::RawDataEvent ev(EVENT_TYPE, m_run, m_ev);
+	  //ADD BLOCK  Event -->0
+	  ev.AddBlock(0, bufferEvent_LVDS);
+	  ev.AddBlock(1, bufferEvent_ADC);
+	  // Send the event to the Data Collector
+	  SendEvent(ev);
+	  // Now increment the event number
+	  m_ev++;
+	}
 
 	if(stopping && !running){	//in case the run is stopped: finish event and send EORE
 	  SendEvent(eudaq::RawDataEvent::EORE(EVENT_TYPE, m_run, ++m_ev));

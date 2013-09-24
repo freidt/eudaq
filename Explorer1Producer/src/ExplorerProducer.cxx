@@ -272,14 +272,14 @@ public:
 	    }*/
 	  //##################################################################################################
 
-	  while(nof<2){		//read LVDS Event
+	  do { //while(nof<2){		//read LVDS Event
 	    num_byte_rcv=recvfrom(sd0,data_packet,BUFFER,0,NULL,NULL);			//receive frame
 	    event_size+=num_byte_rcv;							//increase eventsize
 	    nof++;
 	    for( unsigned data_index = 0 ; data_index < num_byte_rcv ; data_index++ ){	//pack data to buffer
 	      pack(bufferEvent_LVDS,data_packet[data_index]);
 	    }
-	  }
+	  } while (num_byte_rcv!=9);
 	  if(45!=bufferEvent_LVDS.size()){	//check if data size is correct
 	    printf("\n----------------------LVDS: Size not correct!------------------\n");
 	    bad=true;
@@ -287,7 +287,8 @@ public:
 	  event_size=0;		//reset values
 	  nof=0;
 
-	  while(nof<17){		//read ADC event
+
+	  do { //while(num_nof<17){		//read ADC event
 	    num_byte_rcv=recvfrom(sd1,data_packet,BUFFER,0,NULL,NULL);			//receive frame
 	    //very explicit cuts !!!!Data Format!!!!!
 	    if(num_byte_rcv!=9 && num_byte_rcv!=8844 && num_byte_rcv!=7962) bad=true;
@@ -300,7 +301,7 @@ public:
 	    for( unsigned data_index = 0 ; data_index < num_byte_rcv ; data_index++ ){	//pack data to buffer
 	      pack(bufferEvent_ADC,data_packet[data_index]);
 	    }
-	  }
+	  } while (num_byte_rcv!=9);
 	  if(min_frm_cnt!=0){	//check if event corrupt
 	    printf("\nFramecount not correct\nFrame 0 not contained\n");
 	    bad=true;

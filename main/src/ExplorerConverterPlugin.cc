@@ -93,21 +93,21 @@ namespace eudaq {
       }
 //##############################################################################
 ///////////////////////////////////////
-//GetTRIGGER ID			FIXME not needed for Explorer
+//GetTRIGGER ID
 ///////////////////////////////////////
 
       //Get TLU trigger ID from your RawData or better from a different block
       //example: has to be fittet to our needs depending on block managing etc.
       virtual unsigned GetTriggerID(const Event & ev) const {
-        static const unsigned TRIGGER_OFFSET = 8;
+        static const unsigned TRIGGER_OFFSET = 32;
         // Make sure the event is of class RawDataEvent
         if (const RawDataEvent * rev = dynamic_cast<const RawDataEvent *> (&ev)) {
           // This is just an example, modified it to suit your raw data format
           // Make sure we have at least one block of data, and it is large enough
           if (rev->NumBlocks() > 0 &&
               rev->GetBlock(0).size() >= (TRIGGER_OFFSET + sizeof(short))) {
-            // Read a little-endian unsigned short from offset TRIGGER_OFFSET
-            return getlittleendian<unsigned short> (&rev->GetBlock(0)[TRIGGER_OFFSET]);
+            // Read a big-endian unsigned short from offset TRIGGER_OFFSET
+            return getbigendian<unsigned short> (&rev->GetBlock(0)[TRIGGER_OFFSET]);
           }
         }
         // If we are unable to extract the Trigger ID, signal with (unsigned)-1

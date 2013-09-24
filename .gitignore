@@ -13,3 +13,4 @@ gui/Makefile_*
 
 # editor temp files
 *~
+*.swp

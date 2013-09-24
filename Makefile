@@ -1,6 +1,6 @@
 MAKE := make
 
-DIRS := main ni tlu vme eudrb mvd depfet fortis mimoroma taki root gui doc onlinemon Explorer1Producer
+DIRS := main ni tlu vme eudrb mvd depfet fortis mimoroma taki root gui onlinemon Explorer1Producer doc
 
 default: main
 

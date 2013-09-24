@@ -30,6 +30,8 @@ using namespace std;
 //Costructor
 //----------------------------------------------------------------------------------------------
 DeviceExplorer::DeviceExplorer()
+  : fec0(-2)
+  , fec1(-2)
 {
 }
 //Costructor

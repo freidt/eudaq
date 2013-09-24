@@ -156,8 +156,14 @@ public:
     options[3].second	=   PedestalFile;	//Save new name
 
     printf("\n--------------------- Start Servers --------------------\n");
-    fExplorer1->create_server_udp(0);		//Fec0(HLVDS)
-    fExplorer1->create_server_udp(1);		//Fec1(ADC)
+    if (fExplorer1->get_SD(0) < 0) {
+      fExplorer1->create_server_udp(0);		//Fec0(HLVDS)
+    }
+    else printf("Server 0 for FEC HLVDS has already been up\n");
+    if (fExplorer1->get_SD(1) < 0) {
+      fExplorer1->create_server_udp(1);		//Fec1(ADC)
+    }
+    else printf("Server 1 for FEC ADC has already been up\n");
 
     printf("\n--------------------- Configure Explorer --------------------\n");
     fExplorer1->Configure();		//calls python script ConfigureExplorer.py

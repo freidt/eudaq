@@ -255,7 +255,7 @@ public:
 	float timeout = 0.005; // 5 ms (longer than an acquisition)
 
 	while(!check_socket(sd0, timeout) && !stopping) {
-	  std::cout << "Requested event - waiting for its arrival" << std::endl;
+	  //std::cout << "Requested event - waiting for its arrival" << std::endl;
 	}
 
 	if (!stopping) {

@@ -252,6 +252,12 @@ public:
 
 	fExplorer1->GetSingleEvent();			//Send GetSingleEvent to SRS| calls get_single_Event.py
 
+	float timeout = 0.005; // 5 ms (longer than an acquisition)
+
+	while(!check_socket(sd0, timeout) && !stopping) {
+	  std::cout << "Requested event - waiting for its arrival" << std::endl;
+	}
+
 	if (!stopping) {
 	  //###################################################################################################
 	  //Ansatz for alternative solution with changing number of frames
@@ -272,23 +278,24 @@ public:
 	    }*/
 	  //##################################################################################################
 
-	  do { //while(nof<2){		//read LVDS Event
+
+	  while (check_socket(sd0, timeout)) { //read LVDS Event
 	    num_byte_rcv=recvfrom(sd0,data_packet,BUFFER,0,NULL,NULL);			//receive frame
 	    event_size+=num_byte_rcv;							//increase eventsize
 	    nof++;
 	    for( unsigned data_index = 0 ; data_index < num_byte_rcv ; data_index++ ){	//pack data to buffer
 	      pack(bufferEvent_LVDS,data_packet[data_index]);
 	    }
-	  } while (num_byte_rcv!=9);
+	  }
 	  if(45!=bufferEvent_LVDS.size()){	//check if data size is correct
 	    printf("\n----------------------LVDS: Size not correct!------------------\n");
+	    std::cout << "Number of frames: " << nof << std::endl;
 	    bad=true;
 	  }
 	  event_size=0;		//reset values
 	  nof=0;
 
-
-	  do { //while(num_nof<17){		//read ADC event
+	  while (check_socket(sd1, timeout)) {// check_socket(sd1, timeout)) { //read ADC event
 	    num_byte_rcv=recvfrom(sd1,data_packet,BUFFER,0,NULL,NULL);			//receive frame
 	    //very explicit cuts !!!!Data Format!!!!!
 	    if(num_byte_rcv!=9 && num_byte_rcv!=8844 && num_byte_rcv!=7962) bad=true;
@@ -301,9 +308,10 @@ public:
 	    for( unsigned data_index = 0 ; data_index < num_byte_rcv ; data_index++ ){	//pack data to buffer
 	      pack(bufferEvent_ADC,data_packet[data_index]);
 	    }
-	  } while (num_byte_rcv!=9);
+	  }
 	  if(min_frm_cnt!=0){	//check if event corrupt
 	    printf("\nFramecount not correct\nFrame 0 not contained\n");
+	    std::cout << "Number of frames: " << nof << std::endl;
 	    bad=true;
 	  }
 	  unsigned int TotalEventSize=bufferEvent_ADC.size();				//determine total event size framesize+header+data
@@ -316,19 +324,21 @@ public:
 	  }
 	  event_size=0;	//reset values
 	  nof=0;
-	  if (bad){	//discard bad events
-	    bad=false;
-	    printf("\nDiscard Event\n");
-	    continue;
-	  }
 
 	  //Print number of Event
 	  if(m_ev<10 || m_ev%100==0) printf("\n----------------------Event # %d------------------\n",m_ev);
 	  // Create a RawDataEvent to contain the event data to be sent
 	  eudaq::RawDataEvent ev(EVENT_TYPE, m_run, m_ev);
-	  //ADD BLOCK  Event -->0
-	  ev.AddBlock(0, bufferEvent_LVDS);
-	  ev.AddBlock(1, bufferEvent_ADC);
+
+	  if (bad){	//discard bad events
+	    bad=false;
+	    printf("\nSending empty event\n");
+	  }
+	  else {
+	    //ADD BLOCK  Event -->0
+	    ev.AddBlock(0, bufferEvent_LVDS);
+	    ev.AddBlock(1, bufferEvent_ADC);
+	  }
 	  // Send the event to the Data Collector
 	  SendEvent(ev);
 	  // Now increment the event number
@@ -338,7 +348,13 @@ public:
 	if(stopping && !running){	//in case the run is stopped: finish event and send EORE
 	  SendEvent(eudaq::RawDataEvent::EORE(EVENT_TYPE, m_run, ++m_ev));
 	  std::cout << "[ExplorerProducer] Sent EORE " << std::endl;
-	  SetStatus(eudaq::Status::LVL_OK, "Stopped");
+	  while(check_socket(sd0, 1.)) { //read LVDS until empty
+	    num_byte_rcv=recvfrom(sd0,data_packet,BUFFER,0,NULL,NULL);			//receive frame
+	  }
+	  while(check_socket(sd1, 1.)) { //read ADCS until empty
+	    num_byte_rcv=recvfrom(sd1,data_packet,BUFFER,0,NULL,NULL);			//receive frame
+	  }
+	    SetStatus(eudaq::Status::LVL_OK, "Stopped");
 	  printf("\n----------------------- Run %i Stopped ----------------------\n",m_run);
 	}
       }
@@ -361,6 +377,26 @@ private:
   bool UseThreshold;
   config options[6];
 
+
+  bool check_socket(int fd, float timeout) // timeout in s
+  {
+    fd_set fdset;
+    FD_ZERO( &fdset );
+    FD_SET( fd, &fdset );
+
+    struct timeval tv_timeout = { (int)timeout, timeout*1000000 };
+
+    int select_retval = select( fd+1, &fdset, NULL, NULL, &tv_timeout );
+
+    if ( select_retval == -1 ) {
+	std::cout << "Could not read from the socket!" << std::endl; // ERROR!
+    }
+
+    if ( FD_ISSET( fd, &fdset ) )
+      return true; // ready to read
+
+    return false; // timeout
+  }
 };
 
 // The main function that will create a Producer instance and run it

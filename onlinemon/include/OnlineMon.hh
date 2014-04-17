@@ -19,6 +19,7 @@
 #include "eudaq/Logger.hh"
 #include "eudaq/Utils.hh"
 #include "eudaq/OptionParser.hh"
+#include "eudaq/counted_ptr.hh"
 
 //Project Includes
 

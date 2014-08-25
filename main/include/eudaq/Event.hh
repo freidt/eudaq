@@ -39,7 +39,7 @@ namespace eudaq {
 
   class DLLEXPORT Event : public Serializable {
     public:
-      enum Flags { FLAG_BORE=1, FLAG_EORE=2, FLAG_HITS=4, FLAG_FAKE=8, FLAG_SIMU=16, FLAG_ALL=(unsigned)-1 }; // Matches FLAGNAMES in .cc file
+      enum Flags { FLAG_BORE=1, FLAG_EORE=2, FLAG_HITS=4, FLAG_FAKE=8, FLAG_SIMU=16, FLAG_BROKEN=32, FLAG_STATUS=64, FLAG_ALL=(unsigned)-1 }; // Matches FLAGNAMES in .cc file
       Event(unsigned run, unsigned event, unsigned long long timestamp = NOTIMESTAMP, unsigned flags=0)
         : m_flags(flags), m_runnumber(run), m_eventnumber(event), m_timestamp(timestamp) {}
       Event(Deserializer & ds);

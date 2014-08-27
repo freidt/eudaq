@@ -144,7 +144,7 @@ namespace eudaq {
     static time_t start = 0;
     while (more) {
       if (m_eventnumber < 10 || m_eventnumber % 1000 == 0) {
-	if (start == 0)
+	if (start == 0 || m_eventnumber == 0)
 	  start = time(0);
         std::cout << "Complete Event: " << m_runnumber << "." << m_eventnumber << " current time: " << time(0) << " time since start of run: " << time(0) - start << std::endl;  
       }

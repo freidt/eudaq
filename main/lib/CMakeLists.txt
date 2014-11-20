@@ -8,6 +8,16 @@ if (USE_ROOT)
    endif (ROOT_FOUND)
 endif (USE_ROOT)
 
+option(USE_TINYXML "Compiling main library using TinyXML" OFF)
+if (USE_TINYXML)
+     FIND_PACKAGE( TINYXML REQUIRED )
+     if (TINYXML_FOUND)
+       INCLUDE_DIRECTORIES( ${TINYXML_INCLUDE_DIRS} )
+       SET(ADDITIONAL_LIBRARIES ${TINYXML_LIBRARIES} )
+       ADD_DEFINITIONS(-DUSE_TINYXML)
+     endif (TINYXML_FOUND)
+endif (USE_TINYXML)
+
 AUX_SOURCE_DIRECTORY( src library_sources )
 
 ADD_LIBRARY( ${PROJECT_NAME} SHARED ${library_sources} )

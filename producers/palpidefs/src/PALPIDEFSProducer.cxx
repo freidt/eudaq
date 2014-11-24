@@ -570,7 +570,12 @@ void PALPIDEFSProducer::OnConfigure(const eudaq::Configuration & param)
     TDAQBoard* daq_board = 0;
     char buffer[100];
 
-    #ifndef SIMULATION
+    #ifdef SIMULATION
+    if (!m_configured) {
+      m_reader[i] = new DeviceReader(i, m_debuglevel, daq_board, dut);
+      m_next_event[i] = 0;
+    }
+    #else
     if (!m_configured) {
       sprintf(buffer, "BoardAddress_%d", i);
       int board_address = param.Get(buffer, i);
@@ -675,7 +680,7 @@ void PALPIDEFSProducer::OnConfigure(const eudaq::Configuration & param)
     dut->SetStrobeTiming     (m_strobeb_length[i]);
     dut->SetEnableOutputDrivers(true, true);
     dut->SetChipMode         (MODE_ALPIDE_READOUT_B);
-#endif
+    #endif
 
     if (delay > 0)
       m_reader[i]->SetQueueFullDelay(delay);
@@ -689,7 +694,7 @@ void PALPIDEFSProducer::OnConfigure(const eudaq::Configuration & param)
     eudaq::mSleep(10);
   }
 
-#ifndef SIMULATION
+  #ifndef SIMULATION
   // Set back-bias voltage
   m_back_bias_voltage  = param.Get("BackBiasVoltage",  -1.);
   const int MonitorPSU = param.Get("MonitorPSU",       -1.);

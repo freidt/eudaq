@@ -3,7 +3,7 @@ if (USE_ROOT)
    FIND_PACKAGE( ROOT REQUIRED )
    if (ROOT_FOUND)
      INCLUDE_DIRECTORIES( ${ROOT_INCLUDE_DIR} )
-     SET(CMAKE_SHARED_LINKER_FLAGS ${ROOT_LIBRARIES} )
+     LINK_DIRECTORIES( ${ROOT_LIBRARY_DIR} )
      ADD_DEFINITIONS(-DROOT_FOUND)
    endif (ROOT_FOUND)
 endif (USE_ROOT)
@@ -13,7 +13,7 @@ if (USE_TINYXML OR BUILD_palpidefs)
      FIND_PACKAGE( TINYXML REQUIRED )
      if (TINYXML_FOUND)
        INCLUDE_DIRECTORIES( ${TINYXML_INCLUDE_DIRS} )
-       SET(ADDITIONAL_LIBRARIES ${TINYXML_LIBRARIES} )
+       LINK_DIRECTORIES( ${TINYXML_LIBRARIES} )
        ADD_DEFINITIONS(-DUSE_TINYXML)
        message("Compiling main library using TinyXML")
      endif (TINYXML_FOUND)
@@ -29,7 +29,9 @@ SOURCE_GROUP(TCPIP FILES src\\Serializable.cc src\\Producer.cc src\\CommandRecei
 SOURCE_GROUP(Event .*Event.*cc)
 SOURCE_GROUP(Utilities FILES src\\Utils.cc src\\Time.cc src\\Mutex.cc src\\EudaqThread.cc)
 
-target_link_libraries( ${PROJECT_NAME} ${EUDAQ_THREADS_LIB} ${ADDITIONAL_LIBRARIES})
+include_directories( ${INCLUDE_DIRECTORIES} )
+link_directories( ${LINK_DIRECTORIES} )
+target_link_libraries( ${PROJECT_NAME} ${EUDAQ_THREADS_LIB} ${ADDITIONAL_LIBRARIES} ${TINYXML_LIBRARIES} ${ROOT_LIBRARIES} )
 
 
 INSTALL(TARGETS ${PROJECT_NAME}

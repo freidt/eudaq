@@ -109,22 +109,28 @@ class RunControlGUI : public QMainWindow, public Ui::wndRun, public eudaq::RunCo
     }
     void timer() {
       if (!m_stopping) {
-        if (m_runsizelimit >= 1024 && m_filebytes >= m_runsizelimit) {
-          EUDAQ_INFO("File limit reached: " + to_string(m_filebytes) + " > " + to_string(m_runsizelimit));
+        if (m_runsizelimit >= 1024 && m_filebytes >= m_runsizelimit ||
+            m_runeventlimit >= 1 && m_events >= m_runeventlimit) {
+          if (m_filebytes >= m_runsizelimit) {
+            EUDAQ_INFO("File limit reached: " + to_string(m_filebytes) + " > " + to_string(m_runsizelimit));
+          }
+          else {
+            EUDAQ_INFO("Event limit reached: " + to_string(m_events) + " > " + to_string(m_runeventlimit));
+          }
           eudaq::mSleep(1000);
           StopRun(false);
           eudaq::mSleep(8000);
           if (m_nextconfigonfilelimit) {
-	    if (cmbConfig->currentIndex()+1 < cmbConfig->count()) {
-	      EUDAQ_INFO("Moving to next config file and starting a new run");
-	      cmbConfig->setCurrentIndex(cmbConfig->currentIndex()+1);
-	      on_btnConfig_clicked();
-	      eudaq::mSleep(1000);
-	      m_startrunwhenready = true;
-	    } else
-	      EUDAQ_INFO("All config files processed.");
-	  } else
-	    on_btnStart_clicked(true);
+            if (cmbConfig->currentIndex()+1 < cmbConfig->count()) {
+              EUDAQ_INFO("Moving to next config file and starting a new run");
+              cmbConfig->setCurrentIndex(cmbConfig->currentIndex()+1);
+              on_btnConfig_clicked();
+              eudaq::mSleep(1000);
+              m_startrunwhenready = true;
+            } else
+              EUDAQ_INFO("All config files processed.");
+          } else
+            on_btnStart_clicked(true);
         } else if (dostatus) {
           GetStatus();
         }
@@ -158,6 +164,7 @@ signals:
     int m_prevtrigs;
     double m_prevtime, m_runstarttime;
     long long m_filebytes;
+    long long m_events;
     bool dostatus;
     bool m_producer_not_ok;
     bool m_startrunwhenready;

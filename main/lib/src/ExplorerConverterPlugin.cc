@@ -34,7 +34,7 @@ typedef unsigned __int64 uint64_t;
 #include <climits>
 #include <cfloat>
 
-#include "ExplorerConverterPluginHelpers.h"
+#include "eudaq/ExplorerConverterPluginHelpers.h"
 
 using namespace std;
 

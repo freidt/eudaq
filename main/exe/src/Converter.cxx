@@ -8,7 +8,7 @@
 #include "eudaq/MultiFileReader.hh"
 
 using namespace eudaq;
-unsigned dbg = 0; 
+unsigned dbg = 0;
 
 
 int main(int, char ** argv) {
@@ -24,44 +24,43 @@ int main(int, char ** argv) {
   eudaq::Option<size_t> syncEvents(op, "n" ,"syncevents",1000,"size_t","Number of events that need to be synchronous before they are used");
   eudaq::Option<unsigned long long> syncDelay(op, "d" ,"longDelay",20,"unsigned long long","us time long time delay");
   eudaq::Option<std::string> level(op, "l", "log-level", "INFO", "level",
-      "The minimum level for displaying log messages locally");
+                                   "The minimum level for displaying log messages locally");
   op.ExtraHelpText("Available output types are: " + to_string(eudaq::FileWriterFactory::GetTypes(), ", "));
   try {
     op.Parse(argv);
     EUDAQ_LOG_LEVEL(level.Value());
     std::vector<unsigned> numbers = parsenumbers(events.Value());
-	std::sort(numbers.begin(),numbers.end());
+    std::sort(numbers.begin(),numbers.end());
 		eudaq::multiFileReader reader;
     for (size_t i = 0; i < op.NumArgs(); ++i) {
-	
       reader.addFileReader(op.GetArg(i), ipat.Value());
-	}
-      std::shared_ptr<eudaq::FileWriter> writer(FileWriterFactory::Create(type.Value()));
-      writer->SetFilePattern(opat.Value());
-      writer->StartRun(reader.RunNumber());
-	  int event_nr=0;
-      do {
-		  if (!numbers.empty()&&reader.GetDetectorEvent().GetEventNumber()>numbers.back())
-		  {
-			break;
-		  }else if (reader.GetDetectorEvent().IsBORE() || reader.GetDetectorEvent().IsEORE() || numbers.empty() ||
-				std::find(numbers.begin(), numbers.end(), reader.GetDetectorEvent().GetEventNumber()) != numbers.end()) {
-			  writer->WriteEvent(reader.GetDetectorEvent());
-			  if(dbg>0)std::cout<< "writing one more event" << std::endl;
-			  ++event_nr;
-			  if (event_nr%1000==0)
-			  {
-				  std::cout<<"Processing event "<< event_nr<<std::endl;
-			  }
+    }
+    std::shared_ptr<eudaq::FileWriter> writer(FileWriterFactory::Create(type.Value()));
+    writer->SetFilePattern(opat.Value());
+    writer->StartRun(reader.RunNumber());
+    int event_nr=0;
+    do {
+      if (!numbers.empty()&&reader.GetDetectorEvent().GetEventNumber()>numbers.back())
+      {
+        break;
+      }else if (reader.GetDetectorEvent().IsBORE() || reader.GetDetectorEvent().IsEORE() || numbers.empty() ||
+                std::find(numbers.begin(), numbers.end(), reader.GetDetectorEvent().GetEventNumber()) != numbers.end()) {
+        writer->WriteEvent(reader.GetDetectorEvent());
+        if(dbg>0)std::cout<< "writing one more event" << std::endl;
+        ++event_nr;
+        if (event_nr%1000==0)
+        {
+          std::cout<<"Processing event "<< event_nr<<std::endl;
+        }
 			}
-      } while (reader.NextEvent());
-      if(dbg>0)std::cout<< "no more events to read" << std::endl;
-    
+    } while (reader.NextEvent());
+    if(dbg>0)std::cout<< "no more events to read" << std::endl;
+
   } catch (...) {
-	    std::cout << "Time: " << (std::clock() - start) / (double)(CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
+    std::cout << "Time: " << (std::clock() - start) / (double)(CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
     return op.HandleMainException();
   }
-    std::cout << "Time: " << (std::clock() - start) / (double)(CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
+  std::cout << "Time: " << (std::clock() - start) / (double)(CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
   if(dbg>0)std::cout<< "almost done with Converter. exiting" << std::endl;
   return 0;
 }

@@ -29,10 +29,8 @@ namespace eudaq{
 
   void SyncBase::addBOREEvent(int fileIndex, const eudaq::DetectorEvent& BOREvent )
   {
-    std::cout << std::endl << std::endl << "addBOREEvent" << std::endl << std::endl << std::endl;
     m_registertProducer+=BOREvent.NumEvents();
     m_EventsProFileReader.push_back(BOREvent.NumEvents());
-    std::cout << "BOREvent.NumEvents()=" << BOREvent.NumEvents() << std::endl;
     eudaq::Configuration conf(BOREvent.GetTag("CONFIG"));
     conf.SetSection("EventStruct");
     longTimeDiff_=conf.Get("LongBusyTime",longTimeDiff_); //from config file
@@ -103,7 +101,6 @@ namespace eudaq{
   SyncBase::eventqueue_t& SyncBase::getQueuefromId(unsigned producerID )
   {
     if(m_ProducerId2Eventqueue.find(producerID)==m_ProducerId2Eventqueue.end()){
-      std::cout << "producerID " << producerID << " not found" << std::endl;
       EUDAQ_THROW("unknown Producer ID");
     }
     return m_ProducerEventQueue[m_ProducerId2Eventqueue[producerID]];
@@ -131,7 +128,6 @@ namespace eudaq{
 
       if (compareTLUwithEventQueues(TLU_queue.front()))
       {
-        std::cout << "making new detector event" << std::endl;
         makeDetectorEvent();
         return true;
       }else if(!Event_Queue_Is_Empty())
@@ -144,10 +140,8 @@ namespace eudaq{
 
   bool SyncBase::SyncNEvents( size_t N )
   {
-    std::cout << "SyncNEvents, N=" << N << ", "<< m_DetectorEventQueue.size() <<std::endl;
     while (m_DetectorEventQueue.size()<=N)
     {
-      std::cout << "actually starting to sync" << std::endl;
       if (!SyncFirstEvent())
       {
         return false;
@@ -198,12 +192,10 @@ namespace eudaq{
     int ReturnValue=Event_IS_Sync;
 
     std::shared_ptr<TLUEvent> tlu=std::dynamic_pointer_cast<TLUEvent>(tlu_event);
-
     while(!event_queue.empty())
     {
       auto& currentEvent=event_queue.front();
       ReturnValue=PluginManager::IsSyncWithTLU(*currentEvent,*tlu);
-      std::cout << "ReturnValue=" << ReturnValue << std::endl;
       if (ReturnValue== Event_IS_Sync )
       {
         return true;
@@ -242,20 +234,10 @@ namespace eudaq{
 
   void SyncBase::PrepareForEvents()
   {
-    std::cout << "Bla" << std::endl;
-    std::cout << m_registertProducer << std::endl;
-    std::cout << &m_DetectorEventQueue << std::endl;
-    std::cout << m_ProducerId2Eventqueue.size() << std::endl;
-    size_t max_events = 0;
-    for (auto iter=m_ProducerId2Eventqueue.begin(); iter!=m_ProducerId2Eventqueue.end(); ++iter) {
-      std::cout << iter->first << " " << iter->second << std::endl;
-      size_t t=m_ProducerEventQueue[iter->second].size();
-      if (t>max_events) max_events=t;
-    }
     if (m_TLUs_found==0 || m_fake_TLU)
     {
       std::cout << "no TLU events found in the data\n for the resynchronisation it is nessasary to have a TLU in the data stream \n for now the synchrounsation only works with the old TLU (date 12.2013)" << std::endl;
-      std::cout << "generating TLU event stream starting from 0" << std::endl;
+      std::cout << " generating TLU event stream starting from 0" << std::endl;
     }else if (m_TLUs_found>1)
     {
       //EUDAQ_THROW("to many TLUs in the data stream.\n the sync mechanism only works with 1 TLU");
@@ -290,7 +272,6 @@ namespace eudaq{
     {
 			for(size_t i=0;i< detEvent->NumEvents();++i){
 				auto &q=getQueuefromId(fileIndex,i);
-        std::cout << i << " " <<  &q << " " << q.size() << " " << fileIndex << std::endl;
 				q.push(detEvent->GetEventPtr(i));
 			}
       if (m_fake_TLU) {

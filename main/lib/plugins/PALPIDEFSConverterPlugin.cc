@@ -58,6 +58,7 @@ using namespace std;
 #define CHECK_TIMESTAMPS // if timestamps are not consistent marks event as
                          // broken
 #define WRITE_TEMPERATURE_LOG // write NTC values to a text file
+#define WRITE_TEMPERATURE_FILE // write NTC values to a text file
 
 //#define CHECK_EVENT_DISTANCE // if event distance does not correspond to the set pulser
                                // period, they are marked as broken
@@ -501,15 +502,18 @@ namespace eudaq {
 #endif
 #ifdef WRITE_TEMPERATURE_FILE
         for (int id = 0; id < m_nLayers; id++) {
-          vector<unsigned char> data = rev->GetBlock(id);
-          if (data.size() == 4) {
-            float temp = 0;
-            for (int i = 0; i < 4; i++) {
-              ((unsigned char *)(&temp))[i] = data[i];
-              *m_temperature_file << "Layer "<< id << " Temp is : " << temp - 273.15 << endl;
-              cout << "T (layer " << id << ") is: " << temp << endl;
+            if (id ==3){
+                vector<unsigned char> data = rev->GetBlock(id);
+                if (data.size() == 4) {
+                    float temp = 0;
+                    for (int i = 0; i < 4; i++) {
+                        ((unsigned char *)(&temp))[i] = data[i];
+                        if (i == 3){
+                            *m_temperature_file << "Layer "<< id << " Temp is : " << temp - 273.15 << endl;
+                            cout << "T (layer " << id << ") is: " << temp << endl; }
+                    }
+                }
             }
-          }
         }
 #endif
         sev.SetFlags(Event::FLAG_STATUS);

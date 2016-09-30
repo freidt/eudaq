@@ -297,6 +297,7 @@ protected:
 
   int m_n_trig;
   float m_period;
+  float m_temp;
 
   // S-Curve scan output data
   unsigned char**** m_SCS_data;

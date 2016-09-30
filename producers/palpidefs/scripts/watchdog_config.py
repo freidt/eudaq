@@ -4,7 +4,7 @@
 # put an empty array for no alerts
 #ALERT_TARGET = [ ]
 
-ALERT_TARGET = [ "jgrosseo@cern.ch", "freidt@cern.ch" ]
+ALERT_TARGET = [ "hyeonjoong.kim@cern.ch", "jongsik.eum@cern.ch", "kyungeon.choi@cern.ch" ]
 #ALERT_TARGET = [ "jgrosseo@cern.ch", "41764875459@mail2sms.cern.ch" ]
 
 # time in seconds between problem occured and alert sent

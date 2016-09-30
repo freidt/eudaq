@@ -604,6 +604,7 @@ void PALPIDEFSProducer::OnConfigure(const eudaq::Configuration &param) {
 
   m_n_trig = param.Get("NTrig", -1);
   m_period = param.Get("Period", -1.);
+  m_temp = param.Get("Temp", -1.);
 
   const int nDevices = param.Get("Devices", 1);
   if (m_nDevices == 0 || m_nDevices == nDevices)
@@ -692,6 +693,22 @@ void PALPIDEFSProducer::OnConfigure(const eudaq::Configuration &param) {
     m_SCS_points = new unsigned char*[m_nDevices];
     for (int i = 0; i < m_nDevices; i++) {
       m_SCS_points[i] = 0x0;
+    }
+  }
+  std::cout << m_temp<<std::endl;
+  if ( m_temp > 0) {
+      std::cout << "Temperature Control on going" << std::endl;
+      char cmd[100];
+      snprintf(cmd,100, "${SCRIPT_DIR}/huber.py 1 %2.1f", m_temp);
+      int attempts = 0;
+      bool success = false;
+      while (!success && attempts++<5) {
+          success = (system(cmd)==0);
+      }
+    if (!success) {
+      std::string msg = "Failed to configure temperature!";
+      EUDAQ_ERROR(msg.data());
+      SetConnectionState(eudaq::ConnectionState::STATE_ERROR, msg.data());
     }
   }
 

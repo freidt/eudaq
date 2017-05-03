@@ -49,7 +49,7 @@ extern/IPHCRC
 # Ignore paths to windows libraries installed by user:
 extern/pthread*
 extern/libusb*
-
+extern/new-alpide-software*
 
 #ignore debug folder
 debug/*

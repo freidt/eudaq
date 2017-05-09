@@ -308,6 +308,7 @@
         <value begin="3" width="2">
           <title>Prbs Rate</title>
           <description>Control of the output bit rate when using the internal PRBS-7 pattern generator. b00:1200Mb/s b01:400Mb/s b10:600Mb/s b11: synchronous reset of the PRBS-7 pattern generator. Effective when pseudo-random pattern ggenerator enabled</description>
+          <content>-1</content>
         </value>
         <value begin="5">
           <title>Bypass 8b10b</title>

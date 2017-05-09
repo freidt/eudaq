@@ -263,6 +263,7 @@ void DeviceReader::SetRunning(bool running) {
 
 void DeviceReader::StartDAQ() {
   m_daq_board->StartTrigger();
+  eudaq::mSleep(100);
   m_daq_board->WriteBusyOverrideReg(true);
 }
 

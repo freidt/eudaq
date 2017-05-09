@@ -104,12 +104,22 @@ def send_alert(prefix=""):
     msg = MIMEText(text)
 
     msg['Subject'] = "pALPIDEfs Watchdog: STATUS %d %d %d %d" % (PADS[0]['bit'], PADS[1]['bit'], PADS[2]['bit'], PADS[3]['bit'])
-    msg['From'] = "noreply@cern.ch"
+    msg['From'] = "palpide@cern.ch"
+#    msg['From'] = "noreply@cern.ch"
     msg['To'] = target
 
     # Send the message via our own SMTP server, but don't include the
     # envelope header.
-    s = smtplib.SMTP('cernmx.cern.ch')
+    s = smtplib.SMTP('cernmx.cern.ch')  #This is for CERN
+
+#From here, for outside CERN TB
+#    s = smtplib.SMTP('smtp.cern.ch',587)
+#    s.ehlo()
+#    s.starttls()
+#    s.ehlo()
+#    s.login("<USER>", "<PASSWORD>")
+#Up to here, for outside CERN TB
+    
     #s.set_debuglevel(True)
     s.sendmail(msg['From'], [ target ], msg.as_string())
     s.quit()

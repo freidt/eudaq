@@ -11,8 +11,9 @@ def main():
     ret_value = 0 # 0 = success, 1 = error
 
     # activate the back bias line
-    if vbb_dst>0:
-        h.ramp_from_to(sour, 3, (0., 5.), 1)
+#    if vbb_dst>0:
+#    h.ramp_from_to(sour, 3, (0., 3.3), 1)
+
 
     for ivbb in range (0, len(h.vbb_chan)):
         vbb_src=h.meas_voltage(sour, h.vbb_chan[ivbb])
@@ -25,8 +26,8 @@ def main():
             ret_value = 1
 
     # deactivate Vbb line and short it
-    if vbb_dst<0.1:
-        h.ramp_from_to(sour, 3, (5., 0.), 1)
+#    if vbb_dst<0.1:
+#        h.ramp_from_to(sour, 3, (5., 0.), 1)
 
     return ret_value
 

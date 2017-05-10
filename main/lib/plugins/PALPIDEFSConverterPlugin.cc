@@ -322,7 +322,7 @@ namespace eudaq {
           break;
         case 2:
           m_dut[i] = new TpAlpidefs2((TTestSetup*)0x0, 0, conf->GetChipConfig(), true);
-          m_daq_board[i] = new TDAQBoard(0x0, conf->GetBoardConfig());
+          m_daq_board[i] = new TDAQBoard2(0x0, conf->GetBoardConfig());
           m_daq_board[i]->SetFirmwareVersion(m_fw_version[i]);
           break;
         case 3:
@@ -703,6 +703,8 @@ namespace eudaq {
 	      }
 	      else if (m_chip_type[current_layer]==4) { // ALPIDE
 		TpAlpidefs4* p4 = dynamic_cast<TpAlpidefs4*>(m_dut[current_layer]);
+        payload_begin+=24;
+        payload_length-=24;
 		if (p4) eventOK = p4->DecodeEvent(&data[0]+payload_begin, payload_length, &hits, 0x0, &statusBits);
 	      }
 

@@ -7,8 +7,6 @@
 
 #include <tinyxml.h>
 
-// pALPIDEfs driver
-#include "TTestsetup.h"
 
 // #define DEBUG_USB
 
@@ -73,19 +71,6 @@ public:
     m_daq_board->ReadMonitorRegisters();
   }
 
-  void RequestThresholdScan() {
-    SimpleLock lock(m_mutex);
-    m_threshold_scan_result = 0;
-    m_threshold_scan_rqst = true;
-  }
-  int GetThresholdScanState() {
-    SimpleLock lock(m_mutex);
-    return m_threshold_scan_result;
-  }
-  void SetupThresholdScan(int NMaskStage, int NEvts, int ChStart, int ChStop,
-                          int ChStep, unsigned char*** Data,
-                          unsigned char* Points);
-
   bool IsWaitingForEOR() {
     SimpleLock lock(m_mutex);
     return m_waiting_for_eor;
@@ -121,17 +106,9 @@ protected:
     SimpleLock lock(m_mutex);
     m_stop = true;
   }
-  bool IsThresholdScanRqsted() {
-    SimpleLock lock(m_mutex);
-    return m_threshold_scan_rqst;
-  }
 
   void Push(SingleEvent* ev);
   bool QueueFull();
-
-  bool ThresholdScan();
-
-  void PrepareMaskStage(TAlpidePulseType APulseType, int AMaskStage, int steps);
 
   std::queue<SingleEvent* > m_queue;
   unsigned long m_queue_size;
@@ -162,15 +139,6 @@ protected:
   // config
   int m_queuefull_delay;          // milliseconds
   unsigned long m_max_queue_size; // queue size in B
-
-  // S-Curve scan
-  int m_n_mask_stages;
-  int m_n_events;
-  int m_ch_start;
-  int m_ch_stop;
-  int m_ch_step;
-  unsigned char*** m_data;
-  unsigned char* m_points;
 };
 
 class ALPIDEProducer : public eudaq::Producer {
@@ -207,7 +175,6 @@ public:
 protected:
   bool InitialiseTestSetup(const eudaq::Configuration &param);
   bool PowerOffTestSetup();
-  bool DoSCurveScan(const eudaq::Configuration &param);
   void SetBackBiasVoltage(const eudaq::Configuration &param);
   void ControlLinearStage(const eudaq::Configuration &param);
   void ControlRotaryStages(const eudaq::Configuration &param);
@@ -256,7 +223,6 @@ protected:
 
 
   std::mutex m_mutex;
-  TTestSetup* m_testsetup;
 
   std::vector<unsigned char>** m_raw_data;
 
@@ -264,9 +230,6 @@ protected:
   eudaq::Configuration m_param;
   int m_nDevices;
   int m_status_interval;
-  std::string m_full_config_v1;
-  std::string m_full_config_v2;
-  std::string m_full_config_v3;
   std::string m_full_config_v4;
   bool m_ignore_trigger_ids;
   bool m_recover_outofsync;
@@ -276,24 +239,12 @@ protected:
   int* m_trigger_delay;
   int* m_readout_delay;
   int* m_chip_readoutmode;
-  bool m_monitor_PSU;
   float m_back_bias_voltage;
   float m_dut_pos;
   float m_dut_angle1;
   float m_dut_angle2;
-  // S-Curve scan settings
-  int m_SCS_charge_start;
-  int m_SCS_charge_stop;
-  int m_SCS_charge_step;
-  int m_SCS_n_events;
-  int m_SCS_n_mask_stages;
-  int m_SCS_n_steps;
-  bool* m_do_SCS;
 
   int m_n_trig;
   float m_period;
 
-  // S-Curve scan output data
-  unsigned char**** m_SCS_data;
-  unsigned char** m_SCS_points;
 };

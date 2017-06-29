@@ -13,6 +13,11 @@ cd `dirname $0`
 CURR_DIR=$(pwd)
 export SCRIPT_DIR="`pwd`/producers/palpidefs/scripts"
 export LOG_DIR="`pwd`/logs/palpidefs"
+mkdir -p ${LOG_DIR}
+if [[ ! -d "${LOG_DIR}" ]]; then
+  echo "pALPIDEfs log folder not found, exiting"
+  exit
+fi
 export LOG_PREFIX=$(date +%s)
 producers/palpidefs/scripts/store_git_info.sh ${LOG_DIR}/${LOG_PREFIX} ${CURR_DIR} # store the git information
 producers/palpidefs/scripts/fx3/build_linux.sh # compile the fx3 programming tool

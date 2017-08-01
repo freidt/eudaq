@@ -15,16 +15,16 @@ endif (TINYXML_FOUND)
 
 find_package(libusb-1.0 REQUIRED)
 
-if (NOT EXISTS "${CMAKE_ALPIDE_SOFTWARE_INCLUDE}/TAlpide.h")
-  message(FATAL_ERROR "Path to ALPIDE driver is wrong - Could not find ${CMAKE_ALPIDE_SOFTWARE_INCLUDE}/TTestsetup.h")
-endif (NOT EXISTS "${CMAKE_ALPIDE_SOFTWARE_INCLUDE}/TAlpide.h")
+if (NOT EXISTS "${CMAKE_ALPIDE_SOFTWARE_INCLUDE}/inc/TAlpide.h")
+  message(FATAL_ERROR "Path to ALPIDE driver is wrong - Could not find ${CMAKE_ALPIDE_SOFTWARE_INCLUDE}/inc/TAlpide.h")
+endif (NOT EXISTS "${CMAKE_ALPIDE_SOFTWARE_INCLUDE}/inc/TAlpide.h")
 if (NOT EXISTS "${CMAKE_ALPIDE_SOFTWARE_INCLUDE}/libalpide.so")
   message(FATAL_ERROR "Path to alpide driver is wrong - Could not find ${CMAKE_ALPIDE_SOFTWARE_INCLUDE}/libalpide.so")
 endif (NOT EXISTS "${CMAKE_ALPIDE_SOFTWARE_INCLUDE}/libalpide.so")
 
 set(driver_library "${CMAKE_ALPIDE_SOFTWARE_INCLUDE}/libalpide.so" )
 
-INCLUDE_DIRECTORIES( "include" ${CMAKE_ALPIDE_SOFTWARE_INCLUDE} ${LIBUSB_1_INCLUDE_DIRS})
+INCLUDE_DIRECTORIES( "include" ${CMAKE_ALPIDE_SOFTWARE_INCLUDE}/inc ${LIBUSB_1_INCLUDE_DIRS})
 ADD_EXECUTABLE(${name} ${sourcefiles})
 
 TARGET_LINK_LIBRARIES(${name} EUDAQ ${CMAKE_THREAD_LIBS_INIT} ${LIBUSB_1_LIBRARIES} ${TINYXML_LIBRARIES} ${driver_library})

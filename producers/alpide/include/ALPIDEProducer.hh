@@ -8,8 +8,6 @@
 #include <tinyxml.h>
 
 
-// #define DEBUG_USB
-
 struct SingleEvent {
   SingleEvent(unsigned int length, uint64_t trigger_id, uint64_t timestamp, uint64_t timestamp_reference)
     : m_buffer(0), m_length(length), m_trigger_id(trigger_id),
@@ -36,17 +34,18 @@ protected:
   std::mutex &m_mutex;
 };
 
-class DeviceReader {
+class Setup {
 public:
-  DeviceReader(int id, int debuglevel, TTestSetup* test_setup, int boardid,
-               TDAQBoard* daq_board, TpAlpidefs* dut, std::vector<unsigned char>* raw_data=0x0);
-  ~DeviceReader();
+  Setup(int id, int debuglevel, TConfig* config,
+        std::vector<TReadoutBoard *> * boards, TBoardType* boardType,
+        std::vector<TAlpide *> * chip,
+        std::vector<unsigned char>* raw_data=0x0);
+  ~Setup();
 
   void SetMaxQueueSize(unsigned long size) { m_max_queue_size = size; }
   void SetQueueFullDelay(int delay) { m_queuefull_delay = delay; }
 
-  void Stop();
-  void SetRunning(bool running);
+  void Configure();
   void StartDAQ();
   void StopDAQ();
   void DeleteNextEvent();
@@ -57,84 +56,26 @@ public:
     return m_queue.size();
   }
 
-  static void* LoopWrapper(void* arg);
-
-  TDAQBoard* GetDAQBoard() { return m_daq_board; }
-  TpAlpidefs* GetDUT() { return m_dut; }
-
-  float GetTemperature();
-
-  void ParseXML(TiXmlNode* node, int base, int rgn, bool readwrite);
-
-  void PrintDAQboardStatus() {
-    m_daq_board->ReadAllRegisters();
-    m_daq_board->ReadMonitorRegisters();
-  }
-
-  bool IsWaitingForEOR() {
-    SimpleLock lock(m_mutex);
-    return m_waiting_for_eor;
-  }
-
-  bool IsReading() {
-    SimpleLock lock(m_mutex);
-    return m_reading;
-  }
-
-  bool IsFlushing() {
-    SimpleLock lock(m_mutex);
-    return m_flushing;
-  }
-
 protected:
   void Loop();
   void Print(int level, const char* text, uint64_t value1 = -1,
              uint64_t value2 = -1, uint64_t value3 = -1, uint64_t value4 = -1);
-  bool IsStopping() {
-    SimpleLock lock(m_mutex);
-    return m_stop;
-  }
-  bool IsRunning() {
-    SimpleLock lock(m_mutex);
-    return m_running;
-  }
-  void SetReading(bool reading) {
-    SimpleLock lock(m_mutex);
-    m_reading = reading;
-  }
-  void SetStopping() {
-    SimpleLock lock(m_mutex);
-    m_stop = true;
-  }
 
   void Push(SingleEvent* ev);
-  bool QueueFull();
 
   std::queue<SingleEvent* > m_queue;
   unsigned long m_queue_size;
-  std::thread m_thread;
-  std::mutex m_mutex;
   std::vector<unsigned char>* m_raw_data;
-  bool m_stop;
-  bool m_stopped;
-  bool m_running;
-  bool m_flushing;
-  bool m_reading;
-  bool m_waiting_for_eor;
-  bool m_threshold_scan_rqst;
-  int m_threshold_scan_result; // 0 = not running, 1 = running, 2 = error, 3 =
-                               // success
+
   int m_id;
   int m_boardid; // id of the DAQ board as used by TTestSetup::GetDAQBoard()...
   int m_debuglevel;
   uint64_t m_last_trigger_id;
   uint64_t m_timestamp_reference;
 
-  TTestSetup* m_test_setup;
-  TDAQBoard* m_daq_board;
-  TpAlpidefs* m_dut;
-  int m_daq_board_header_length;
-  int m_daq_board_trailer_length;
+  TConfig* fConfig;
+  std::vector<TReadoutBoard *> * fBoards;
+  std::vector<TAlpide *> * fChips;
 
   // config
   int m_queuefull_delay;          // milliseconds
@@ -148,18 +89,14 @@ public:
     : eudaq::Producer(name, runcontrol), m_run(0), m_ev(0), m_good_ev(0),
       m_oos_ev(0), m_last_oos_ev(0), m_timestamp_last(0x0), m_timestamp_full(0x0),
       m_done(false), m_running(false), m_stopping(false), m_flushing(false),
-      m_configured(false), m_firstevent(false), m_reader(0), m_next_event(0),
+      m_configured(false), m_firstevent(false), m_setups(0), m_next_event(0),
       m_debuglevel(debuglevel), m_testsetup(0), m_raw_data(0x0), m_mutex(), m_param(), m_nDevices(0),
-      m_status_interval(-1), m_full_config_v1(), m_full_config_v2(),
-      m_full_config_v3(), m_full_config_v4(), m_ignore_trigger_ids(true),
+      m_status_interval(-1), m_full_config_v4(), m_ignore_trigger_ids(true),
       m_recover_outofsync(true), m_chip_type(0x0),
       m_strobe_length(0x0), m_strobeb_length(0x0), m_trigger_delay(0x0),
       m_readout_delay(0x0), m_chip_readoutmode(0x0),
       m_monitor_PSU(false), m_back_bias_voltage(-1),
-      m_dut_pos(-1.), m_dut_angle1(-1.), m_dut_angle2(-1.),
-      m_SCS_charge_start(-1), m_SCS_charge_stop(-1),
-      m_SCS_charge_step(-1), m_SCS_n_events(-1), m_SCS_n_mask_stages(-1),
-      m_SCS_n_steps(-1), m_do_SCS(0x0), m_SCS_data(0x0), m_SCS_points(0x0) {}
+      m_dut_pos(-1.), m_dut_angle1(-1.), m_dut_angle2(-1.) {}
   ~ALPIDEProducer() { PowerOffTestSetup(); }
 
   virtual void OnConfigure(const eudaq::Configuration &param);
@@ -183,29 +120,6 @@ protected:
   void SendEOR();
   void SendStatusEvent();
   void PrintQueueStatus();
-  void PrepareMaskStage(TAlpidePulseType APulseType, int AMaskStage,
-                        int nPixels, int*** Data);
-
-  bool IsRunning() {
-    SimpleLock lock(m_mutex);
-    return m_running;
-  }
-  bool IsStopping() {
-    SimpleLock lock(m_mutex);
-    return m_stopping;
-  }
-  bool IsFlushing() {
-    SimpleLock lock(m_mutex);
-    return m_flushing;
-  }
-  bool IsDone() {
-    SimpleLock lock(m_mutex);
-    return m_done;
-  }
-  bool IsConfiguring() {
-    SimpleLock lock(m_mutex);
-    return m_configuring;
-  }
 
   unsigned m_run, m_ev, m_good_ev, m_oos_ev, m_last_oos_ev;
   uint64_t *m_timestamp_last;
@@ -217,7 +131,7 @@ protected:
   bool m_configuring;
   bool m_configured;
   bool m_firstevent;
-  DeviceReader** m_reader;
+  Setup** m_setups;
   SingleEvent** m_next_event;
   int m_debuglevel;
 

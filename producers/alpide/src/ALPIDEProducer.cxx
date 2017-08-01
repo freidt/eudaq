@@ -23,10 +23,10 @@ using eudaq::RawDataEvent;
 static const std::string EVENT_TYPE = "pALPIDEfsRAW";
 
 
-DeviceReader::DeviceReader(int id, int debuglevel, TTestSetup* test_setup,
+Setup::Setup(int id, int debuglevel, TTestSetup* test_setup,
                            int boardid, TDAQBoard* daq_board, TpAlpidefs* dut,
                            std::vector<unsigned char>* raw_data/*=0x0*/)
-  : m_queue(), m_queue_size(0), m_thread(&DeviceReader::LoopWrapper, this),
+  : m_queue(), m_queue_size(0), m_thread(&Setup::LoopWrapper, this),
     m_mutex(), m_raw_data(raw_data),  m_stop(false), m_stopped(false),
     m_running(false), m_flushing(false), m_waiting_for_eor(false),
     m_threshold_scan_rqst(false), m_threshold_scan_result(0),
@@ -42,21 +42,21 @@ DeviceReader::DeviceReader(int id, int debuglevel, TTestSetup* test_setup,
   Print(0, "Starting with last event id: %lu", m_last_trigger_id);
 }
 
-DeviceReader::~DeviceReader() {
+Setup::~Setup() {
   while (IsReading() || IsFlushing() || !m_stopped) {
     Print(0, "still busy, cannot delete the object - Reading: %d, Flushing: %d, Stopped: %d", IsReading(), IsFlushing(), m_stopped);
     eudaq::mSleep(5000);
   }
 }
 
-void DeviceReader::Stop() {
+void Setup::Stop() {
   Print(0, "Stopping...");
   SetStopping();
   m_thread.join();
   m_stopped = true;
 }
 
-void DeviceReader::SetRunning(bool running) {
+void Setup::SetRunning(bool running) {
   Print(0, "Set running: %lu, m_running : %lu, m_waiting_for_eor : %lu", running, m_running, m_waiting_for_eor);
   {
     SimpleLock lock(m_mutex);
@@ -68,18 +68,18 @@ void DeviceReader::SetRunning(bool running) {
   }
 }
 
-void DeviceReader::StartDAQ() {
+void Setup::StartDAQ() {
   m_daq_board->StartTrigger();
   m_daq_board->WriteBusyOverrideReg(true);
 }
 
-void DeviceReader::StopDAQ() {
+void Setup::StopDAQ() {
   m_daq_board->WriteBusyOverrideReg(false);
   eudaq::mSleep(100);
   m_daq_board->StopTrigger();
 }
 
-void DeviceReader::DeleteNextEvent() {
+void Setup::DeleteNextEvent() {
   SimpleLock lock(m_mutex);
   if (m_queue.size() == 0)
     return;
@@ -89,7 +89,7 @@ void DeviceReader::DeleteNextEvent() {
   delete ev;
 }
 
-SingleEvent* DeviceReader::PopNextEvent() {
+SingleEvent* Setup::PopNextEvent() {
   SimpleLock lock(m_mutex);
   if (m_queue.size() > 0) {
     SingleEvent* ev = m_queue.front();
@@ -106,19 +106,19 @@ SingleEvent* DeviceReader::PopNextEvent() {
   return 0;
 }
 
-void DeviceReader::PrintQueueStatus() {
+void Setup::PrintQueueStatus() {
   SimpleLock lock(m_mutex);
   Print(0, "Queue status: %lu elements. Total size: %lu", m_queue.size(),
         m_queue_size);
 }
 
-void* DeviceReader::LoopWrapper(void* arg) {
-  DeviceReader* ptr = static_cast<DeviceReader* >(arg);
+void* Setup::LoopWrapper(void* arg) {
+  Setup* ptr = static_cast<Setup* >(arg);
   ptr->Loop();
   return 0;
 }
 
-void DeviceReader::Loop() {
+void Setup::Loop() {
   Print(0, "Loop starting...");
   while (1) {
     if (IsStopping()) {
@@ -271,7 +271,7 @@ void DeviceReader::Loop() {
         m_last_trigger_id = header.EventId;
       } else {
         //char message[300];
-        //sprintf(message, "DeviceReader %d: ERROR decoding event. Header: %d Trailer: %d", m_id, HeaderOK, TrailerOK);
+        //sprintf(message, "Setup %d: ERROR decoding event. Header: %d Trailer: %d", m_id, HeaderOK, TrailerOK);
         //EUDAQ_WARN(message);
         Print(0, "ERROR decoding event. Header: %d Trailer: %d Length %d", HeaderOK,
               TrailerOK, LengthOK);
@@ -293,7 +293,7 @@ void DeviceReader::Loop() {
 
 
 
-void DeviceReader::Print(int level, const char* text, uint64_t value1,
+void Setup::Print(int level, const char* text, uint64_t value1,
                          uint64_t value2, uint64_t value3, uint64_t value4) {
   // level:
   //   0 -> printout
@@ -301,7 +301,7 @@ void DeviceReader::Print(int level, const char* text, uint64_t value1,
   //   2 -> WARN
   //   3 -> ERROR
 
-  std::string tmp("DeviceReader %d: ");
+  std::string tmp("Setup %d: ");
   tmp += text;
 
   const int maxLength = 100000;
@@ -321,7 +321,7 @@ void DeviceReader::Print(int level, const char* text, uint64_t value1,
   }
 }
 
-void DeviceReader::Push(SingleEvent* ev) {
+void Setup::Push(SingleEvent* ev) {
   while (QueueFull())
     eudaq::mSleep(m_queuefull_delay);
   SimpleLock lock(m_mutex);
@@ -331,7 +331,7 @@ void DeviceReader::Push(SingleEvent* ev) {
     Print(0, "Pushed events. Current queue size: %lu", m_queue.size());
 }
 
-bool DeviceReader::QueueFull() {
+bool Setup::QueueFull() {
   SimpleLock lock(m_mutex);
   if (m_queue_size > m_max_queue_size) {
     if (m_debuglevel > 3)
@@ -341,11 +341,11 @@ bool DeviceReader::QueueFull() {
   return false;
 }
 
-float DeviceReader::GetTemperature() {
+float Setup::GetTemperature() {
   return m_daq_board->GetTemperature();
 }
 
-void DeviceReader::ParseXML(TiXmlNode* node, int base, int rgn,
+void Setup::ParseXML(TiXmlNode* node, int base, int rgn,
                             bool readwrite) {
   ::ParseXML(m_dut, node, base, rgn, readwrite);
 }
@@ -472,7 +472,7 @@ void ALPIDEProducer::OnConfigure(const eudaq::Configuration &param) {
   if (!m_chip_readoutmode)
     m_chip_readoutmode = new int[m_nDevices];
   if (!m_reader) {
-    m_reader = new DeviceReader*[m_nDevices];
+    m_reader = new Setup*[m_nDevices];
     for (int i = 0; i < m_nDevices; i++) {
       m_reader[i] = 0x0;
     }
@@ -690,24 +690,6 @@ bool ALPIDEProducer::InitialiseTestSetup(const eudaq::Configuration &param) {
     const int delay = param.Get("QueueFullDelay", 0);
     const unsigned long queue_size = param.Get("QueueSize", 0) * 1024 * 1024;
 
-    TConfig* config = new TConfig(TYPE_TELESCOPE, m_nDevices);
-    char mybuffer[100];
-    for (int idev = 0; idev < m_nDevices; idev++) {
-      // data port - default: parallel
-      snprintf(mybuffer, 100, "DataPort_%d", idev);
-      TDataPort dataPort = (TDataPort)param.Get(mybuffer, (int)PORT_PARALLEL);
-      config->SetDataPort(idev, dataPort);
-
-      // DAQ board hardware version - default: 3
-      snprintf(mybuffer, 100, "DAQboardVersion_%d", idev);
-      config->GetBoardConfig(idev)->BoardVersion = param.Get(mybuffer, 3);
-    }
-
-    if (!m_testsetup) {
-      std::cout << "Creating test setup " << std::endl;
-      m_testsetup = new TTestSetup;
-    }
-
     for (int idev = 0; idev < m_nDevices; idev++) {
       sprintf(mybuffer, "BoardAddress_%d", idev);
       int board_address = param.Get(mybuffer, -1);
@@ -814,8 +796,8 @@ bool ALPIDEProducer::InitialiseTestSetup(const eudaq::Configuration &param) {
                   << " (delay " << delay << " - queue size " << queue_size
                   << ") powered." << std::endl;
 
-        m_reader[i] = new DeviceReader(i, m_debuglevel, m_testsetup, board_no,
-                                       daq_board, dut, m_raw_data[i]);
+        m_reader[i] = new Setup(i, m_debuglevel, m_testsetup, board_no,
+                                daq_board, dut, m_raw_data[i]);
         if (m_next_event[i])
           delete m_next_event[i];
         m_next_event[i] = 0;

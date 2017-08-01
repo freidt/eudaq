@@ -15,9 +15,9 @@ endif (TINYXML_FOUND)
 
 find_package(libusb-1.0 REQUIRED)
 
-if (NOT EXISTS "${CMAKE_ALPIDE_SOFTWARE_INCLUDE}/TTestsetup.h")
+if (NOT EXISTS "${CMAKE_ALPIDE_SOFTWARE_INCLUDE}/TAlpide.h")
   message(FATAL_ERROR "Path to ALPIDE driver is wrong - Could not find ${CMAKE_ALPIDE_SOFTWARE_INCLUDE}/TTestsetup.h")
-endif (NOT EXISTS "${CMAKE_ALPIDE_SOFTWARE_INCLUDE}/TTestsetup.h")
+endif (NOT EXISTS "${CMAKE_ALPIDE_SOFTWARE_INCLUDE}/TAlpide.h")
 if (NOT EXISTS "${CMAKE_ALPIDE_SOFTWARE_INCLUDE}/libalpide.so")
   message(FATAL_ERROR "Path to alpide driver is wrong - Could not find ${CMAKE_ALPIDE_SOFTWARE_INCLUDE}/libalpide.so")
 endif (NOT EXISTS "${CMAKE_ALPIDE_SOFTWARE_INCLUDE}/libalpide.so")

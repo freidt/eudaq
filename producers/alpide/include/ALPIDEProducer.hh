@@ -8,6 +8,11 @@
 #include <tinyxml.h>
 
 
+class TConfig;
+class TReadoutBoard;
+class TBoardType;
+class TAlpide;
+
 struct SingleEvent {
   SingleEvent(unsigned int length, uint64_t trigger_id, uint64_t timestamp, uint64_t timestamp_reference)
     : m_buffer(0), m_length(length), m_trigger_id(trigger_id),
@@ -38,12 +43,9 @@ class Setup {
 public:
   Setup(int id, int debuglevel, TConfig* config,
         std::vector<TReadoutBoard *> * boards, TBoardType* boardType,
-        std::vector<TAlpide *> * chip,
+        std::vector<TAlpide *> * chips,
         std::vector<unsigned char>* raw_data=0x0);
   ~Setup();
-
-  void SetMaxQueueSize(unsigned long size) { m_max_queue_size = size; }
-  void SetQueueFullDelay(int delay) { m_queuefull_delay = delay; }
 
   void Configure();
   void StartDAQ();
@@ -52,7 +54,6 @@ public:
   SingleEvent* PopNextEvent();
   void PrintQueueStatus();
   int GetQueueLength() {
-    SimpleLock lock(m_mutex);
     return m_queue.size();
   }
 
@@ -63,23 +64,20 @@ protected:
 
   void Push(SingleEvent* ev);
 
+  // configuration
+  int m_id;
+  int m_debuglevel;
+  TConfig* m_config;
+  std::vector<TReadoutBoard *> * m_boards;
+  TBoardType* m_boardType;
+  std::vector<TAlpide *> * m_chips;
+
   std::queue<SingleEvent* > m_queue;
   unsigned long m_queue_size;
   std::vector<unsigned char>* m_raw_data;
 
-  int m_id;
-  int m_boardid; // id of the DAQ board as used by TTestSetup::GetDAQBoard()...
-  int m_debuglevel;
   uint64_t m_last_trigger_id;
   uint64_t m_timestamp_reference;
-
-  TConfig* fConfig;
-  std::vector<TReadoutBoard *> * fBoards;
-  std::vector<TAlpide *> * fChips;
-
-  // config
-  int m_queuefull_delay;          // milliseconds
-  unsigned long m_max_queue_size; // queue size in B
 };
 
 class ALPIDEProducer : public eudaq::Producer {
@@ -90,12 +88,11 @@ public:
       m_oos_ev(0), m_last_oos_ev(0), m_timestamp_last(0x0), m_timestamp_full(0x0),
       m_done(false), m_running(false), m_stopping(false), m_flushing(false),
       m_configured(false), m_firstevent(false), m_setups(0), m_next_event(0),
-      m_debuglevel(debuglevel), m_testsetup(0), m_raw_data(0x0), m_mutex(), m_param(), m_nDevices(0),
+      m_debuglevel(debuglevel), m_raw_data(0x0), m_mutex(), m_param(), m_nDevices(0),
       m_status_interval(-1), m_full_config_v4(), m_ignore_trigger_ids(true),
       m_recover_outofsync(true), m_chip_type(0x0),
       m_strobe_length(0x0), m_strobeb_length(0x0), m_trigger_delay(0x0),
-      m_readout_delay(0x0), m_chip_readoutmode(0x0),
-      m_monitor_PSU(false), m_back_bias_voltage(-1),
+      m_readout_delay(0x0), m_chip_readoutmode(0x0), m_back_bias_voltage(-1),
       m_dut_pos(-1.), m_dut_angle1(-1.), m_dut_angle2(-1.) {}
   ~ALPIDEProducer() { PowerOffTestSetup(); }
 
@@ -115,7 +112,7 @@ protected:
   void SetBackBiasVoltage(const eudaq::Configuration &param);
   void ControlLinearStage(const eudaq::Configuration &param);
   void ControlRotaryStages(const eudaq::Configuration &param);
-  bool ConfigChip(int id, TpAlpidefs *dut, std::string configFile);
+  //bool ConfigChip(int id, TpAlpidefs *dut, std::string configFile);
   int BuildEvent();
   void SendEOR();
   void SendStatusEvent();

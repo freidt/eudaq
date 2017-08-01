@@ -23,64 +23,43 @@ using eudaq::RawDataEvent;
 static const std::string EVENT_TYPE = "pALPIDEfsRAW";
 
 
-Setup::Setup(int id, int debuglevel, TTestSetup* test_setup,
-                           int boardid, TDAQBoard* daq_board, TpAlpidefs* dut,
-                           std::vector<unsigned char>* raw_data/*=0x0*/)
-  : m_queue(), m_queue_size(0), m_thread(&Setup::LoopWrapper, this),
-    m_mutex(), m_raw_data(raw_data),  m_stop(false), m_stopped(false),
-    m_running(false), m_flushing(false), m_waiting_for_eor(false),
-    m_threshold_scan_rqst(false), m_threshold_scan_result(0),
-    m_boardid(id), m_id(id), m_debuglevel(debuglevel),
-    m_test_setup(test_setup),  m_daq_board(daq_board), m_dut(dut),
-    m_daq_board_header_length(daq_board->GetEventHeaderLength()),
-    m_daq_board_trailer_length(daq_board->GetEventTrailerLength()),
-    m_last_trigger_id(0), m_timestamp_reference(0),
-    m_queuefull_delay(100), m_max_queue_size(50 * 1024 * 1024),
-    m_n_mask_stages(0), m_n_events(0), m_ch_start(0),
-    m_ch_stop(0), m_ch_step(0), m_data(0x0), m_points(0x0) {
-  m_last_trigger_id = m_daq_board->GetNextEventId();
+Setup::Setup(int id, int debuglevel, TConfig* config,
+             std::vector<TReadoutBoard *> * boards, TBoardType* boardType,
+             std::vector<TAlpide *> * chips,
+             std::vector<unsigned char>* raw_data/*=0x0*/)
+  : m_id(id)
+  , m_debuglevel(debuglevel)
+  , m_config(config)
+  , m_boards(boards)
+  , m_boardType(boardType)
+  , m_chips(chips)
+  , m_queue()
+  , m_queue_size(0)
+  , m_raw_data(raw_data)
+  , m_last_trigger_id((uint64_t)-1)
+  , m_timestamp_reference((uint64_t)-1)
+{
+  //m_last_trigger_id = m_daq_board->GetNextEventId();
   Print(0, "Starting with last event id: %lu", m_last_trigger_id);
 }
 
 Setup::~Setup() {
-  while (IsReading() || IsFlushing() || !m_stopped) {
-    Print(0, "still busy, cannot delete the object - Reading: %d, Flushing: %d, Stopped: %d", IsReading(), IsFlushing(), m_stopped);
-    eudaq::mSleep(5000);
-  }
-}
-
-void Setup::Stop() {
-  Print(0, "Stopping...");
-  SetStopping();
-  m_thread.join();
-  m_stopped = true;
-}
-
-void Setup::SetRunning(bool running) {
-  Print(0, "Set running: %lu, m_running : %lu, m_waiting_for_eor : %lu", running, m_running, m_waiting_for_eor);
-  {
-    SimpleLock lock(m_mutex);
-    if (m_running && !running) {
-      m_flushing = true;
-      m_waiting_for_eor = true;
-    }
-    m_running = running;
-  }
+  eudaq::mSleep(5000);
 }
 
 void Setup::StartDAQ() {
-  m_daq_board->StartTrigger();
-  m_daq_board->WriteBusyOverrideReg(true);
+  //m_daq_board->StartTrigger();
+  //m_daq_board->WriteBusyOverrideReg(true);
 }
 
 void Setup::StopDAQ() {
-  m_daq_board->WriteBusyOverrideReg(false);
-  eudaq::mSleep(100);
-  m_daq_board->StopTrigger();
+  //m_daq_board->WriteBusyOverrideReg(false);
+  //eudaq::mSleep(100);
+  //m_daq_board->StopTrigger();
 }
 
 void Setup::DeleteNextEvent() {
-  SimpleLock lock(m_mutex);
+  //SimpleLock lock(m_mutex);
   if (m_queue.size() == 0)
     return;
   SingleEvent* ev = m_queue.front();
@@ -90,7 +69,7 @@ void Setup::DeleteNextEvent() {
 }
 
 SingleEvent* Setup::PopNextEvent() {
-  SimpleLock lock(m_mutex);
+  //SimpleLock lock(m_mutex);
   if (m_queue.size() > 0) {
     SingleEvent* ev = m_queue.front();
     m_queue.pop();
@@ -107,186 +86,20 @@ SingleEvent* Setup::PopNextEvent() {
 }
 
 void Setup::PrintQueueStatus() {
-  SimpleLock lock(m_mutex);
+  //SimpleLock lock(m_mutex);
   Print(0, "Queue status: %lu elements. Total size: %lu", m_queue.size(),
         m_queue_size);
-}
-
-void* Setup::LoopWrapper(void* arg) {
-  Setup* ptr = static_cast<Setup* >(arg);
-  ptr->Loop();
-  return 0;
 }
 
 void Setup::Loop() {
   Print(0, "Loop starting...");
   while (1) {
-    if (IsStopping()) {
-      SimpleLock lock(m_mutex);
-      m_flushing = false;
-      break;
-    }
-
-
-    if (IsThresholdScanRqsted()) {
-      {
-        SimpleLock lock(m_mutex);
-        m_threshold_scan_rqst = false;
-        m_threshold_scan_result = 1;
-      }
-
-      if (!ThresholdScan()) {
-        SimpleLock lock(m_mutex);
-        m_threshold_scan_result = 2;
-        Print(3, "Threshold scan failed!");
-      } else {
-        SimpleLock lock(m_mutex);
-        m_threshold_scan_result = 3;
-        Print(0, "Threshold scan finished!");
-      }
-    }
-
-    if (!IsRunning() && !IsFlushing()) {
-      eudaq::mSleep(20);
-      continue;
-    }
 
     if (m_debuglevel > 10)
       eudaq::mSleep(1000);
 
     // no event waiting
 
-
-    const int maxDataLength =
-      258 * 2 * 32 + 28; // 256 words per region, region header (2 words) per
-    // region, header (20 bytes), trailer (8 bytes)
-    unsigned char data_buf[maxDataLength] = { 0 };
-    int length = -1;
-    TEventHeader header;
-
-    // data taking
-    SetReading(true);
-    int readEvent = -1;
-    int flushCounter = 0;
-    do {
-#ifndef DEBUG_USB
-      readEvent = m_daq_board->ReadChipEvent(data_buf, &length, maxDataLength);
-#else
-      int error = 0;
-      unsigned char* debug = 0x0;
-      int debug_length = 0;
-      readEvent = m_daq_board->ReadChipEvent(data_buf, &length, maxDataLength, &error, &debug, &debug_length);
-      if (debug_length>0 && m_raw_data) {
-        std::vector<unsigned char> vec(&debug[0], &debug[debug_length]);
-        m_raw_data->insert(m_raw_data->end(), vec.begin(), vec.end());
-      }
-#endif
-      if (readEvent==-3) {
-	while (!IsFlushing() && !IsStopping())
-	  eudaq::mSleep(100);
-	{
-	  SimpleLock lock(m_mutex);
-	  m_flushing = false;
-	  Print(0, "Finished flushing %lu [m_daq_board->GetNextEventId()] %lu [m_last_trigger_id]",
-		m_daq_board->GetNextEventId(), m_last_trigger_id);
-	}
-      }
-      else if (IsFlushing() && readEvent==-2) {
-        ++flushCounter;
-      }
-    } while ((IsRunning() || IsFlushing()) && readEvent<1 && readEvent!=-3 && flushCounter<50 && !IsStopping());
-
-    if (length>0 && length < 24) {
-      Print(0, "UNEXPECTED: event length shorter than 24 Bytes");
-    }
-
-    if (flushCounter>=15) {
-      SimpleLock lock(m_mutex);
-      Print(0, "UNEXPECTED: did not receive stop trigger marker. Aborting flushing %lu %lu !",
-            m_daq_board->GetNextEventId(), m_last_trigger_id);
-      m_flushing = false;
-      m_reading = false;
-      continue;
-    }
-
-    if (IsRunning() && !IsFlushing() && !IsStopping() && (readEvent==1 || (readEvent==-2 && length > 0))) {
-      if (length == 0 && readEvent) {
-        SimpleLock lock(m_mutex);
-        Print(0, "UNEXPECTED: 0 event received but trigger has not been stopped.");
-        m_reading = false;
-        continue;
-      } else if (length == 0 && !readEvent) {
-        m_reading = false;
-        continue;
-      }
-
-      bool TrailerOK = false;
-      bool LengthOK = false;
-      if (length > m_daq_board_trailer_length) {
-        TrailerOK = m_daq_board->DecodeEventTrailer(data_buf + length - m_daq_board_trailer_length, &header);
-        LengthOK = (length==header.EventSize*4);
-      }
-      bool HeaderOK = false;
-      if (TrailerOK &&
-          length > m_daq_board_header_length &&
-          header.EventSize*4>m_daq_board_header_length &&
-          length >= header.EventSize*4) {
-        HeaderOK = m_daq_board->DecodeEventHeader(data_buf + length - header.EventSize*4, &header);
-      }
-      if (HeaderOK && TrailerOK && LengthOK) {
-        if (m_debuglevel > 2) {
-          std::vector<TPixHit> hits;
-
-          if (!m_dut->DecodeEvent(data_buf + m_daq_board_header_length, length - m_daq_board_header_length - m_daq_board_trailer_length, &hits)) {
-            std::cerr << "ERROR decoding event payload. " << std::endl;
-          } else {
-            m_dut->DumpHitData(hits);
-          }
-
-          m_test_setup->DumpRawData(data_buf, length);
-
-          std::string str = "RAW payload (length %d): ";
-          for (int j = 0; j < length - m_daq_board_header_length - m_daq_board_trailer_length; j++) {
-            char buffer[20];
-            sprintf(buffer, "%02x ", data_buf[j + m_daq_board_header_length]);
-            str += buffer;
-          }
-          str += "\n";
-          Print(0, str.data(), length);
-        }
-        if (!m_timestamp_reference) {
-          int address = 0x207;
-          uint32_t tmp_value = 0;
-          m_daq_board->ReadRegister(address, &tmp_value);
-          tmp_value &= 0xFFC000; // keep only bits not transmitted in the header (47:38)
-          m_timestamp_reference = (tmp_value << 24) | header.TimeStamp;
-        }
-
-        SingleEvent* ev =
-          new SingleEvent(length, header.EventId, header.TimeStamp, m_timestamp_reference);
-        memcpy(ev->m_buffer, data_buf, length);
-        // add to queue
-        Push(ev);
-
-        m_last_trigger_id = header.EventId;
-      } else {
-        //char message[300];
-        //sprintf(message, "Setup %d: ERROR decoding event. Header: %d Trailer: %d", m_id, HeaderOK, TrailerOK);
-        //EUDAQ_WARN(message);
-        Print(0, "ERROR decoding event. Header: %d Trailer: %d Length %d", HeaderOK,
-              TrailerOK, LengthOK);
-        char buffer[30];
-        sprintf(buffer, "RAW data (length %d): ", length);
-        std::string str(buffer);
-        for (int j = 0; j < length; j++) {
-          sprintf(buffer, "%02x ", data_buf[j]);
-          str += buffer;
-        }
-        str += "\n";
-        Print(0, str.data());
-      }
-    }
-    SetReading(false);
   }
   Print(0, "ThreadRunner stopping...");
 }
@@ -322,38 +135,18 @@ void Setup::Print(int level, const char* text, uint64_t value1,
 }
 
 void Setup::Push(SingleEvent* ev) {
-  while (QueueFull())
-    eudaq::mSleep(m_queuefull_delay);
-  SimpleLock lock(m_mutex);
+  //SimpleLock lock(m_mutex);
   m_queue.push(ev);
   m_queue_size += ev->m_length;
   if (m_debuglevel > 2)
     Print(0, "Pushed events. Current queue size: %lu", m_queue.size());
 }
 
-bool Setup::QueueFull() {
-  SimpleLock lock(m_mutex);
-  if (m_queue_size > m_max_queue_size) {
-    if (m_debuglevel > 3)
-      Print(0, "BUSY: %lu %lu", m_queue.size(), m_queue_size);
-    return true;
-  }
-  return false;
-}
-
-float Setup::GetTemperature() {
-  return m_daq_board->GetTemperature();
-}
-
-void Setup::ParseXML(TiXmlNode* node, int base, int rgn,
-                            bool readwrite) {
-  ::ParseXML(m_dut, node, base, rgn, readwrite);
-}
-
 // -------------------------------------------------------------------------------------------------
-
+/*
 bool ALPIDEProducer::ConfigChip(int id, TpAlpidefs* dut,
-                                   std::string configFile) {
+                                std::string configFile) {
+
   // TODO maybe add this functionality to TDAQBoard?
   char buffer[1000];
   sprintf(buffer, "Device %d: Reading chip configuration from file %s", id,
@@ -373,7 +166,7 @@ bool ALPIDEProducer::ConfigChip(int id, TpAlpidefs* dut,
   ParseXML(dut, doc.FirstChild("root")->ToElement(), -1, -1, false);
   return true;
 }
-
+*/
 void ALPIDEProducer::OnConfigure(const eudaq::Configuration &param) {
   {
     SimpleLock lock(m_mutex);
@@ -381,7 +174,7 @@ void ALPIDEProducer::OnConfigure(const eudaq::Configuration &param) {
   }
   std::cout << "Configuring..." << std::endl;
   if (&param!=&m_param) m_param = param; // store configuration
-
+/*
   long wait_cnt = 0;
   while (IsRunning() || IsStopping()) {
     eudaq::mSleep(10);
@@ -429,26 +222,6 @@ void ALPIDEProducer::OnConfigure(const eudaq::Configuration &param) {
   m_full_config_v3 = param.Get("FullConfigV3", "");
   m_full_config_v4 = param.Get("FullConfigV4", "");
 
-  m_SCS_charge_start = param.Get("SCSchargeStart", 0);
-  m_SCS_charge_stop = param.Get("SCSchargeStop", 50);
-  if (m_SCS_charge_stop > 170) {
-    m_SCS_charge_stop = 170;
-    std::cout << "Maximum charge value limited to 170!" << std::endl;
-  }
-  m_SCS_charge_step = param.Get("SCSchargeStep", 1);
-  m_SCS_n_events = param.Get("SCSnEvents", 50);
-  if (m_SCS_n_events > 254) {
-    m_SCS_n_events = 254;
-    std::cout << "Number of events in a S-curve scan limited to 254!"
-              << std::endl;
-  }
-  m_SCS_n_mask_stages = param.Get("SCSnMaskStages", 160);
-  m_SCS_n_steps = (m_SCS_charge_stop - m_SCS_charge_start) / m_SCS_charge_step;
-  m_SCS_n_steps =
-    ((m_SCS_charge_stop - m_SCS_charge_start) % m_SCS_charge_step > 0)
-    ? m_SCS_n_steps + 1
-    : m_SCS_n_steps;
-
   if (!m_next_event) {
     m_next_event = new SingleEvent*[m_nDevices];
     for (int i = 0; i < m_nDevices; i++) {
@@ -471,10 +244,10 @@ void ALPIDEProducer::OnConfigure(const eudaq::Configuration &param) {
     m_timestamp_full = new uint64_t[m_nDevices];
   if (!m_chip_readoutmode)
     m_chip_readoutmode = new int[m_nDevices];
-  if (!m_reader) {
-    m_reader = new Setup*[m_nDevices];
+  if (!m_setups) {
+    m_setups = new Setup*[m_nDevices];
     for (int i = 0; i < m_nDevices; i++) {
-      m_reader[i] = 0x0;
+      m_setups[i] = 0x0;
     }
   }
   if (!m_raw_data) {
@@ -485,20 +258,6 @@ void ALPIDEProducer::OnConfigure(const eudaq::Configuration &param) {
       #else
       m_raw_data[i] = 0x0;
       #endif
-    }
-  }
-  if (!m_do_SCS)
-    m_do_SCS = new bool[m_nDevices];
-  if (!m_SCS_data) {
-    m_SCS_data = new unsigned char***[m_nDevices];
-    for (int i = 0; i < m_nDevices; i++) {
-      m_SCS_data[i] = 0x0;
-    }
-  }
-  if (!m_SCS_points) {
-    m_SCS_points = new unsigned char*[m_nDevices];
-    for (int i = 0; i < m_nDevices; i++) {
-      m_SCS_points[i] = 0x0;
     }
   }
 
@@ -514,44 +273,11 @@ void ALPIDEProducer::OnConfigure(const eudaq::Configuration &param) {
   //ControlLinearStage(param);
   ControlRotaryStages(param);
 
-  for (int i = 0; i < m_nDevices; i++) {
-    const size_t buffer_size = 100;
-    char buffer[buffer_size];
-
-    sprintf(buffer, "SCS_%d", i);
-    m_do_SCS[i] = (bool)param.Get(buffer, 0);
-    if (m_do_SCS[i]) {
-      bool generate_arrays = false;
-      if (!m_SCS_data[i])
-        generate_arrays = true;
-      if (generate_arrays)
-        m_SCS_data[i] = new unsigned char**[512];
-      if (generate_arrays)
-        m_SCS_points[i] = new unsigned char[m_SCS_n_steps];
-      for (int j = 0; j < 512; ++j) {
-        if (generate_arrays)
-          m_SCS_data[i][j] = new unsigned char*[1024];
-        for (int k = 0; k < 1024; ++k) {
-          if (generate_arrays)
-            m_SCS_data[i][j][k] = new unsigned char[m_SCS_n_steps];
-          for (int l = 0; l < m_SCS_n_steps; ++l) {
-            m_SCS_data[i][j][k][l] = 255;
-          }
-        }
-      }
-      for (int j = 0; j < m_SCS_n_steps; ++j) {
-        m_SCS_points[i][j] = 0;
-      }
-    } else {
-      m_SCS_data[i] = 0x0;
-      m_SCS_points[i] = 0x0;
-    }
-  }
   if (!InitialiseTestSetup(param))
     return;
 
   for (int i = 0; i < m_nDevices; i++) {
-    TDAQBoard* daq_board = m_reader[i]->GetDAQBoard();
+    TDAQBoard* daq_board = m_setups[i]->GetDAQBoard();
     daq_board->WriteBusyOverrideReg(false);
   }
 
@@ -559,8 +285,8 @@ void ALPIDEProducer::OnConfigure(const eudaq::Configuration &param) {
     return;
 
   for (int i = 0; i < m_nDevices; i++) {
-    TpAlpidefs* dut = m_reader[i]->GetDUT();
-    TDAQBoard* daq_board = m_reader[i]->GetDAQBoard();
+    TpAlpidefs* dut = m_setups[i]->GetDUT();
+    TDAQBoard* daq_board = m_setups[i]->GetDAQBoard();
     const size_t buffer_size = 100;
     char buffer[buffer_size];
 
@@ -628,13 +354,13 @@ void ALPIDEProducer::OnConfigure(const eudaq::Configuration &param) {
                         (TAlpideMode)m_chip_readoutmode[i]);       // chip_readoutmode = 1 : triggered ; 2 : continuous mode;
 
     if (delay > 0)
-      m_reader[i]->SetQueueFullDelay(delay);
+      m_setups[i]->SetQueueFullDelay(delay);
     if (queue_size > 0)
-      m_reader[i]->SetMaxQueueSize(queue_size);
+      m_setups[i]->SetMaxQueueSize(queue_size);
 
     int address = 0x207;
     uint32_t tmp_value = 0;
-    m_reader[i]->GetDAQBoard()->ReadRegister(address, &tmp_value);
+    m_setups[i]->GetDAQBoard()->ReadRegister(address, &tmp_value);
     //tmp_value &= 0xFFFFFF; // narrow down to 24 bits
     tmp_value &= 0xFFC000; // keep only bits not transmitted in the header (47:38)
     m_timestamp_full[i] = (m_chip_type[i] >= 3) ? (uint64_t)tmp_value << 24 : 0x0;
@@ -665,7 +391,7 @@ void ALPIDEProducer::OnConfigure(const eudaq::Configuration &param) {
   if (m_debuglevel > 3) {
     for (int i = 0; i < m_nDevices; i++) {
       std::cout << "Reader " << i << ":" << std::endl;
-      m_reader[i]->PrintDAQboardStatus();
+      m_setups[i]->PrintDAQboardStatus();
     }
   }
 
@@ -674,6 +400,7 @@ void ALPIDEProducer::OnConfigure(const eudaq::Configuration &param) {
     m_firstevent = true;
   }
 
+*/
 
   EUDAQ_INFO("Configured (" + param.Name() + ")");
   SetConnectionState(eudaq::ConnectionState::STATE_CONF, "Configured (" + param.Name() + ")");
@@ -684,6 +411,7 @@ void ALPIDEProducer::OnConfigure(const eudaq::Configuration &param) {
 }
 
 bool ALPIDEProducer::InitialiseTestSetup(const eudaq::Configuration &param) {
+  /*
   if (!m_configured) {
     m_nDevices = param.Get("Devices", 1);
 
@@ -796,7 +524,7 @@ bool ALPIDEProducer::InitialiseTestSetup(const eudaq::Configuration &param) {
                   << " (delay " << delay << " - queue size " << queue_size
                   << ") powered." << std::endl;
 
-        m_reader[i] = new Setup(i, m_debuglevel, m_testsetup, board_no,
+        m_setups[i] = new Setup(i, m_debuglevel, m_testsetup, board_no,
                                 daq_board, dut, m_raw_data[i]);
         if (m_next_event[i])
           delete m_next_event[i];
@@ -808,17 +536,19 @@ bool ALPIDEProducer::InitialiseTestSetup(const eudaq::Configuration &param) {
       }
     }
   }
+  */
   return true;
 }
 
 bool ALPIDEProducer::PowerOffTestSetup() {
+  /*
   std::cout << "Powering off test setup" << std::endl;
   for (int i = 0; i < m_nDevices; i++) {
-    if (m_reader[i]) {
-      TDAQBoard* daq_board = m_reader[i]->GetDAQBoard();
-      m_reader[i]->Stop();
-      delete m_reader[i];
-      m_reader[i] = 0x0;
+    if (m_setups[i]) {
+      TDAQBoard* daq_board = m_setups[i]->GetDAQBoard();
+      m_setups[i]->Stop();
+      delete m_setups[i];
+      m_setups[i] = 0x0;
       // power of the DAQboard
       std::vector<SFieldReg> ADCConfigReg0 =
         daq_board
@@ -841,59 +571,7 @@ bool ALPIDEProducer::PowerOffTestSetup() {
   eudaq::mSleep(5000);
   system("${SCRIPT_DIR}/fx3/program.sh");
   return true;
-}
-
-bool ALPIDEProducer::DoSCurveScan(const eudaq::Configuration &param) {
-  bool result = true;
-  bool doScan = false;
-  for (int i = 0; i < m_nDevices; i++) {
-    if (m_do_SCS[i])
-      doScan = true;
-  }
-  if (!doScan)
-    return true;
-
-  for (int i = 0; i < m_nDevices; i++) {
-    if (!m_do_SCS[i])
-      continue;
-    m_reader[i]->SetupThresholdScan(
-      m_SCS_n_mask_stages, m_SCS_n_events, m_SCS_charge_start,
-      m_SCS_charge_stop, m_SCS_charge_step, m_SCS_data[i], m_SCS_points[i]);
-    m_reader[i]->RequestThresholdScan();
-  }
-
-  for (int i = 0; i < m_nDevices; i++) {
-    if (!m_do_SCS[i])
-      continue;
-
-    while (m_reader[i]->GetThresholdScanState() <= 1)
-      eudaq::mSleep(500);
-
-    if (m_reader[i]->GetThresholdScanState() != 3) {
-      const size_t buffer_size = 100;
-      char buffer[buffer_size];
-      snprintf(buffer, buffer_size, "S-Curve scan of DUT %d failed!", i);
-      std::cout << buffer << std::endl;
-      EUDAQ_ERROR(buffer);
-      SetConnectionState(eudaq::ConnectionState::STATE_ERROR, buffer);
-      result = false;
-    }
-  }
-  if (!PowerOffTestSetup()) {
-    char buffer[] = "Powering off the DAQ boards failed!";
-    std::cout << buffer << std::endl;
-    EUDAQ_ERROR(buffer);
-    SetConnectionState(eudaq::ConnectionState::STATE_ERROR, buffer);
-    result = false;
-  }
-  if (!InitialiseTestSetup(param)) {
-    char buffer[] = "Reinitialising the DAQ boards failed!";
-    std::cout << buffer << std::endl;
-    EUDAQ_ERROR(buffer);
-    SetConnectionState(eudaq::ConnectionState::STATE_ERROR, buffer);
-    result = false;
-  }
-  return result;
+  */
 }
 
 void ALPIDEProducer::SetBackBiasVoltage(const eudaq::Configuration &param) {
@@ -1004,6 +682,7 @@ void ALPIDEProducer::ControlLinearStage(const eudaq::Configuration &param) {
 }
 
 void ALPIDEProducer::OnStartRun(unsigned param) {
+  /*
   long wait_cnt = 0;
 
   while (IsStopping()) {
@@ -1040,8 +719,8 @@ void ALPIDEProducer::OnStartRun(unsigned param) {
   PrintQueueStatus();
   bool queues_empty = true;
   for (int i = 0; i < m_nDevices; i++) {
-    while (m_reader[i]->GetQueueLength() > 0) {
-      m_reader[i]->DeleteNextEvent();
+    while (m_setups[i]->GetQueueLength() > 0) {
+      m_setups[i]->DeleteNextEvent();
       queues_empty = false;
     }
   }
@@ -1081,7 +760,7 @@ void ALPIDEProducer::OnStartRun(unsigned param) {
       return;
     }
     // 	std::cout << "PARSEXML READTRUE" << std::endl;
-    m_reader[i]->ParseXML(doc.FirstChild("root")->ToElement(), -1, -1, true);
+    m_setups[i]->ParseXML(doc.FirstChild("root")->ToElement(), -1, -1, true);
 
     std::string configStr;
     configStr << doc;
@@ -1091,7 +770,7 @@ void ALPIDEProducer::OnStartRun(unsigned param) {
     bore.SetTag(tmp, configStr);
 
     // store masked pixels
-    const std::vector<TPixHit> pixels = m_reader[i]->GetDUT()->GetNoisyPixels();
+    const std::vector<TPixHit> pixels = m_setups[i]->GetDUT()->GetNoisyPixels();
 
     std::string pixelStr;
     for (int j = 0; j < pixels.size(); j++) {
@@ -1106,7 +785,7 @@ void ALPIDEProducer::OnStartRun(unsigned param) {
 
     // firmware version
     sprintf(tmp, "FirmwareVersion_%d", i);
-    bore.SetTag(tmp, m_reader[i]->GetDAQBoard()->GetFirmwareName());
+    bore.SetTag(tmp, m_setups[i]->GetDAQBoard()->GetFirmwareName());
 
     sprintf(tmp, "ChipType_%d", i);
     bore.SetTag(tmp, m_chip_type[i]);
@@ -1168,7 +847,7 @@ void ALPIDEProducer::OnStartRun(unsigned param) {
 
 
   for (int i = 0; i < m_nDevices; i++) {
-    TDAQBoard* daq_board = m_reader[i]->GetDAQBoard();
+    TDAQBoard* daq_board = m_setups[i]->GetDAQBoard();
     std::cout << "Reading Device:" << i << " ADCs" <<  std::endl;
     daq_board->ReadAllADCs();
   }
@@ -1180,8 +859,8 @@ void ALPIDEProducer::OnStartRun(unsigned param) {
     m_running = true;
   }
   for (int i = m_nDevices-1; i >= 0; --i) {
-    m_reader[i]->SetRunning(true);
-    m_reader[i]->StartDAQ();
+    m_setups[i]->SetRunning(true);
+    m_setups[i]->StartDAQ();
   }
 
 
@@ -1210,8 +889,8 @@ void ALPIDEProducer::OnStopRun() {
     outfile.close();
 #endif
 
-    m_reader[i]->StopDAQ();
-    m_reader[i]->SetRunning(false);
+    m_setups[i]->StopDAQ();
+    m_setups[i]->SetRunning(false);
   }
   std::cout << "Set Running to False completed" << std::endl;
   SendEOR();
@@ -1219,7 +898,7 @@ void ALPIDEProducer::OnStopRun() {
   unsigned long count = 0;
   bool resetRequired = false;
   for (int i = 0; i < m_nDevices; i++) { // wait until all read transactions are done
-    while ((m_reader[i]->IsReading() || m_reader[i]->IsFlushing()) && count < 1000) {
+    while ((m_setups[i]->IsReading() || m_setups[i]->IsFlushing()) && count < 1000) {
       if (count++ % 250 == 0) {
         std::cout << "Reader is still reading, waiting.. " << std::endl;
       }
@@ -1229,7 +908,7 @@ void ALPIDEProducer::OnStopRun() {
       std::string msg = "Failed to receive the EOT marker!";
       EUDAQ_ERROR(msg.data());
       SetConnectionState(eudaq::ConnectionState::STATE_ERROR, msg.data());
-      m_reader[i]->PrintDAQboardStatus();
+      m_setups[i]->PrintDAQboardStatus();
       resetRequired = true;
     }
   }
@@ -1269,8 +948,8 @@ void ALPIDEProducer::OnStopRun() {
 
   if (resetRequired) {
     for (int i = m_nDevices-1; i >= 0; --i) { // stop the event polling loop
-      m_reader[i]->StopDAQ();
-      m_reader[i]->SetRunning(false);
+      m_setups[i]->StopDAQ();
+      m_setups[i]->SetRunning(false);
     }
     eudaq::mSleep(1000);
     PowerOffTestSetup();
@@ -1353,24 +1032,24 @@ void ALPIDEProducer::Loop() {
             for (int i = 0; i < m_nDevices; i++) {
               if (m_debuglevel > 3){
                 std::cout << "Reader " << i << ":" << std::endl;
-                m_reader[i]->PrintDAQboardStatus();
+                m_setups[i]->PrintDAQboardStatus();
               }
 
               // read the timestamp
               address = 0x207; // upper 24bit
-              m_reader[i]->GetDAQBoard()->ReadRegister(address, &tmp_value);
+              m_setups[i]->GetDAQBoard()->ReadRegister(address, &tmp_value);
               timestamp = (tmp_value & 0xFFFFFF) << 24;
               tmp_value &= 0xFFC000; // keep only bits not transmitted in the header (47:38)
               m_timestamp_full[i] = (m_chip_type[i] >= 3) ? (uint64_t)tmp_value << 24 : 0x0;
 
               address = 0x206; // lower 24bit
-              m_reader[i]->GetDAQBoard()->ReadRegister(address, &tmp_value);
+              m_setups[i]->GetDAQBoard()->ReadRegister(address, &tmp_value);
               timestamp |= (tmp_value & 0xFFFFFF);
 
 
               // check busy status
               address = 0x307;
-              m_reader[i]->GetDAQBoard()->ReadRegister(address, &tmp_value);
+              m_setups[i]->GetDAQBoard()->ReadRegister(address, &tmp_value);
               if ((tmp_value >> 26) & 0x1) found_busy = true;
               if (found_busy) { // busy
                 std::cout << "DAQ board " << i << " is busy." << std::endl;
@@ -1378,7 +1057,7 @@ void ALPIDEProducer::Loop() {
 
               // read the trigger counter
               address = 0x202; // event ID lower 24bit
-              m_reader[i]->GetDAQBoard()->ReadRegister(address, &tmp_value);
+              m_setups[i]->GetDAQBoard()->ReadRegister(address, &tmp_value);
               std::cout << "Event ID " << i << ": 0x" << std::hex << tmp_value
                         << "\tTimestamp: 0x" << timestamp << std::dec << std::endl;
             }
@@ -1389,7 +1068,7 @@ void ALPIDEProducer::Loop() {
 
           std::vector<int> queueLengths;
           for (int i = 0; i < m_nDevices; i++) {
-            queueLengths.push_back(m_reader[i]->GetQueueLength());
+            queueLengths.push_back(m_setups[i]->GetQueueLength());
           }
           std::sort(queueLengths.begin(), queueLengths.end());
           int diff = queueLengths[queueLengths.size()-1] - queueLengths[0];
@@ -1400,7 +1079,7 @@ void ALPIDEProducer::Loop() {
             //SetConnectionState(eudaq::ConnectionState::STATE_ERROR, str);
             for (int i = 0; i < m_nDevices; i++) {
               std::cout << "Reader " << i << ":" << std::endl;
-              m_reader[i]->PrintDAQboardStatus();
+              m_setups[i]->PrintDAQboardStatus();
               reconfigure = true;
             }
           }
@@ -1419,7 +1098,7 @@ void ALPIDEProducer::Loop() {
       //SetConnectionState(eudaq::ConnectionState::STATE_ERROR, str);
       for (int i = 0; i < m_nDevices; i++) {
         std::cout << "Reader " << i << ":" << std::endl;
-        m_reader[i]->PrintDAQboardStatus();
+        m_setups[i]->PrintDAQboardStatus();
       }
       busy_count = 0;
       reconfigure = true;
@@ -1430,7 +1109,7 @@ void ALPIDEProducer::Loop() {
       //SetConnectionState(eudaq::ConnectionState::STATE_ERROR, str);
       for (int i = 0; i < m_nDevices; i++) {
         std::cout << "Reader " << i << ":" << std::endl;
-        m_reader[i]->PrintDAQboardStatus();
+        m_setups[i]->PrintDAQboardStatus();
       }
       out_of_sync_count = 0;
       reconfigure = true;
@@ -1442,7 +1121,7 @@ void ALPIDEProducer::Loop() {
       //SetStatus(eudaq::Status::LVL_WARN, msg.data());
       EUDAQ_WARN(msg);
       for (int i = 0; i < m_nDevices; i++) { // stop the event polling loop
-        m_reader[i]->StopDAQ();
+        m_setups[i]->StopDAQ();
       }
       {
         SimpleLock lock(m_mutex);
@@ -1457,8 +1136,8 @@ void ALPIDEProducer::Loop() {
       // Print queue status and clear them
       PrintQueueStatus();
       for (int i = 0; i < m_nDevices; i++) {
-        while (m_reader[i]->GetQueueLength() > 0) {
-          m_reader[i]->DeleteNextEvent();
+        while (m_setups[i]->GetQueueLength() > 0) {
+          m_setups[i]->DeleteNextEvent();
         }
       }
       {
@@ -1466,8 +1145,8 @@ void ALPIDEProducer::Loop() {
         m_running = true;
       }
       for (int i = 0; i < m_nDevices; i++) {
-        m_reader[i]->SetRunning(true);
-        m_reader[i]->StartDAQ();
+        m_setups[i]->SetRunning(true);
+        m_setups[i]->StartDAQ();
       }
       EUDAQ_INFO("Reconfiguration done.");
       ++reconfigure_count;
@@ -1476,6 +1155,7 @@ void ALPIDEProducer::Loop() {
       reconfigure = false;
     }
   } while (!IsDone());
+  */
 }
 
 int ALPIDEProducer::BuildEvent() {
@@ -1484,6 +1164,7 @@ int ALPIDEProducer::BuildEvent() {
   // - -1 for an out-of-sync which is not recovered
   // - -2 for an out-of-sync recovery attempt
 
+  /*
   if (m_debuglevel > 3)
     std::cout << "BuildEvent..." << std::endl;
 
@@ -1506,7 +1187,7 @@ int ALPIDEProducer::BuildEvent() {
 
   for (int i = 0; i < m_nDevices; i++) {
     if (m_next_event[i] == 0)
-      m_next_event[i] = m_reader[i]->PopNextEvent();
+      m_next_event[i] = m_setups[i]->PopNextEvent();
     if (m_next_event[i] == 0)
       return 0;
   }
@@ -1703,9 +1384,11 @@ int ALPIDEProducer::BuildEvent() {
   }
 
   return 1;
+  */
 }
 
 void ALPIDEProducer::SendEOR() {
+  /*
   char msg[100];
   snprintf(msg, 100, "Sending EOR, Run %d, Event %d", m_run, m_ev);
   std::cout << msg << std::endl;
@@ -1715,24 +1398,27 @@ void ALPIDEProducer::SendEOR() {
     SimpleLock lock(m_mutex);
     m_stopping = false;
   }
+  */
 }
 
 void ALPIDEProducer::SendStatusEvent() {
+  /*
   std::cout << "Sending status event" << std::endl;
   // temperature readout
   RawDataEvent ev(EVENT_TYPE, m_run, m_ev++);
   ev.SetTag("pALPIDEfs_Type", 1);
   for (int i = 0; i < m_nDevices; i++) {
-    float temp = m_reader[i]->GetTemperature();
+    float temp = m_setups[i]->GetTemperature();
     ev.AddBlock(i, &temp, sizeof(float));
   }
   if (IsRunning())
     SendEvent(ev);
+  */
 }
 
 void ALPIDEProducer::PrintQueueStatus() {
   for (int i = 0; i < m_nDevices; i++)
-    m_reader[i]->PrintQueueStatus();
+    m_setups[i]->PrintQueueStatus();
 }
 
 // -------------------------------------------------------------------------------------------------

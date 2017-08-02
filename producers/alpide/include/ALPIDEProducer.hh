@@ -5,80 +5,8 @@
 #include <thread>
 #include <queue>
 
-#include <tinyxml.h>
-
-
-class TConfig;
-class TReadoutBoard;
-class TBoardType;
-class TAlpide;
-
-struct SingleEvent {
-  SingleEvent(unsigned int length, uint64_t trigger_id, uint64_t timestamp, uint64_t timestamp_reference)
-    : m_buffer(0), m_length(length), m_trigger_id(trigger_id),
-      m_timestamp(timestamp), m_timestamp_reference(timestamp_reference) {
-    m_buffer = new unsigned char[length];
-  }
-  ~SingleEvent() {
-    delete[] m_buffer;
-    m_buffer = 0;
-  }
-  unsigned char* m_buffer;
-  unsigned int m_length;
-  uint64_t m_trigger_id;
-  uint64_t m_timestamp;
-  uint64_t m_timestamp_reference;
-};
-
-class SimpleLock {
-public:
-  SimpleLock(std::mutex &mutex) : m_mutex(mutex) { mutex.lock(); }
-  ~SimpleLock() { m_mutex.unlock(); }
-
-protected:
-  std::mutex &m_mutex;
-};
-
-class Setup {
-public:
-  Setup(int id, int debuglevel, TConfig* config,
-        std::vector<TReadoutBoard *> * boards, TBoardType* boardType,
-        std::vector<TAlpide *> * chips,
-        std::vector<unsigned char>* raw_data=0x0);
-  ~Setup();
-
-  void Configure();
-  void StartDAQ();
-  void StopDAQ();
-  void DeleteNextEvent();
-  SingleEvent* PopNextEvent();
-  void PrintQueueStatus();
-  int GetQueueLength() {
-    return m_queue.size();
-  }
-
-protected:
-  void Loop();
-  void Print(int level, const char* text, uint64_t value1 = -1,
-             uint64_t value2 = -1, uint64_t value3 = -1, uint64_t value4 = -1);
-
-  void Push(SingleEvent* ev);
-
-  // configuration
-  int m_id;
-  int m_debuglevel;
-  TConfig* m_config;
-  std::vector<TReadoutBoard *> * m_boards;
-  TBoardType* m_boardType;
-  std::vector<TAlpide *> * m_chips;
-
-  std::queue<SingleEvent* > m_queue;
-  unsigned long m_queue_size;
-  std::vector<unsigned char>* m_raw_data;
-
-  uint64_t m_last_trigger_id;
-  uint64_t m_timestamp_reference;
-};
+class ALPIDESetup;
+class SingleEvent;
 
 class ALPIDEProducer : public eudaq::Producer {
 public:
@@ -94,7 +22,7 @@ public:
       m_strobe_length(0x0), m_strobeb_length(0x0), m_trigger_delay(0x0),
       m_readout_delay(0x0), m_chip_readoutmode(0x0), m_back_bias_voltage(-1),
       m_dut_pos(-1.), m_dut_angle1(-1.), m_dut_angle2(-1.) {}
-  ~ALPIDEProducer() { PowerOffTestSetup(); }
+  ~ALPIDEProducer() { PowerOff(); }
 
   virtual void OnConfigure(const eudaq::Configuration &param);
   virtual void OnStartRun(unsigned param);
@@ -107,8 +35,8 @@ public:
   void Loop();
 
 protected:
-  bool InitialiseTestSetup(const eudaq::Configuration &param);
-  bool PowerOffTestSetup();
+  bool Initialise(const eudaq::Configuration &param);
+  bool PowerOff();
   void SetBackBiasVoltage(const eudaq::Configuration &param);
   void ControlLinearStage(const eudaq::Configuration &param);
   void ControlRotaryStages(const eudaq::Configuration &param);
@@ -128,7 +56,7 @@ protected:
   bool m_configuring;
   bool m_configured;
   bool m_firstevent;
-  Setup** m_setups;
+  ALPIDESetup** m_setups;
   SingleEvent** m_next_event;
   int m_debuglevel;
 

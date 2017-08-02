@@ -1,5 +1,5 @@
 set(name "ALPIDEProducer.exe")
-set(sourcefiles src/ALPIDEProducer.cxx)
+set(sourcefiles src/ALPIDEProducer.cxx src/ALPIDEUtils.cxx)
 # config files to be installed
 
 if (NOT CMAKE_ALPIDE_SOFTWARE_INCLUDE)

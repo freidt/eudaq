@@ -3,7 +3,11 @@ set(sourcefiles src/ALPIDEProducer.cxx)
 # config files to be installed
 
 if (NOT CMAKE_ALPIDE_SOFTWARE_INCLUDE)
-  message(FATAL_ERROR "Path to ALPIDE driver not set - you need to set CMAKE_ALPIDE_SOFTWARE_INCLUDE")
+  if (NOT EXISTS "${PROJECT_SOURCE_DIR}/extern/new-alpide-software/inc/TAlpide.h")
+    message(FATAL_ERROR "\nPath to ALPIDE driver not set:\n - you need to set CMAKE_ALPIDE_SOFTWARE_INCLUDE\n - or download the new-alpide-software to ${PROJECT_SOURCE_DIR}/extern")
+  else (EXISTS "${PROJECT_SOURCE_DIR}/extern/new-alpide-software/inc/TAlpide.h")
+    set(CMAKE_ALPIDE_SOFTWARE_INCLUDE "${PROJECT_SOURCE_DIR}/extern/new-alpide-software")
+  endif(NOT EXISTS "${PROJECT_SOURCE_DIR}/extern/new-alpide-software/inc/TAlpide.h")
 endif(NOT CMAKE_ALPIDE_SOFTWARE_INCLUDE)
 
 FIND_PACKAGE( TINYXML REQUIRED )
@@ -22,9 +26,10 @@ if (NOT EXISTS "${CMAKE_ALPIDE_SOFTWARE_INCLUDE}/libalpide.so")
   message(FATAL_ERROR "Path to alpide driver is wrong - Could not find ${CMAKE_ALPIDE_SOFTWARE_INCLUDE}/libalpide.so")
 endif (NOT EXISTS "${CMAKE_ALPIDE_SOFTWARE_INCLUDE}/libalpide.so")
 
-set(driver_library "${CMAKE_ALPIDE_SOFTWARE_INCLUDE}/libalpide.so" )
+set(driver_library "libalpide.so" )
 
 INCLUDE_DIRECTORIES( "include" ${CMAKE_ALPIDE_SOFTWARE_INCLUDE}/inc ${LIBUSB_1_INCLUDE_DIRS})
+LINK_DIRECTORIES( "${CMAKE_ALPIDE_SOFTWARE_INCLUDE}" )
 ADD_EXECUTABLE(${name} ${sourcefiles})
 
 TARGET_LINK_LIBRARIES(${name} EUDAQ ${CMAKE_THREAD_LIBS_INIT} ${LIBUSB_1_LIBRARIES} ${TINYXML_LIBRARIES} ${driver_library})

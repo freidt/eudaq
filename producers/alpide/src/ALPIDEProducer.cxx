@@ -50,13 +50,45 @@ bool ALPIDEProducer::ConfigChip(int id, TpAlpidefs* dut,
   return true;
 }
 */
+
+void ALPIDEProducer::OnInitialise(const eudaq::Configuration &init) {
+  try {
+    std::cout << "Reading: " << init.Name() << std::endl;
+
+    //m_exampleInitParam = init.Get("InitParameter", 0);
+    //std::cout << "Initialise with parameter = " << m_exampleInitParam << std::endl;
+    //...
+
+    SetConnectionState(eudaq::ConnectionState::STATE_UNCONF, "Initialised (" + init.Name() + ")");
+  }
+  catch(...) {
+    std::cout << "Initialisation Error - Unknown Exception" << std::endl;
+    EUDAQ_ERROR("Initialisation Error - Unknown Exception");
+    SetConnectionState(eudaq::ConnectionState::STATE_ERROR, "Initialisation Error");
+  }
+}
+
+
 void ALPIDEProducer::OnConfigure(const eudaq::Configuration &param) {
+  /*
   {
     SimpleLock lock(m_mutex);
     m_configuring = true;
   }
-  std::cout << "Configuring..." << std::endl;
-  if (&param!=&m_param) m_param = param; // store configuration
+  */
+  try {
+    std::cout << "Configuring (" << param.Name << ") ..." << std::endl;
+    if (&param!=&m_param) m_param = param; // store configuration (needed for reconfiguration)
+
+
+
+    SetConnectionState(eudaq::ConnectionState::STATE_CONF, "Configured (" + param.Name() + ")");
+  }
+  catch(...) {
+    std::cout << "Initialisation Error - Unknown Exception" << std::endl;
+    EUDAQ_ERROR("Initialisation Error - Unknown Exception");
+    SetConnectionState(eudaq::ConnectionState::STATE_ERROR, "Initialisation Error");
+  }
 /*
   long wait_cnt = 0;
   while (IsRunning() || IsStopping()) {

@@ -24,6 +24,7 @@ public:
       m_dut_pos(-1.), m_dut_angle1(-1.), m_dut_angle2(-1.) {}
   ~ALPIDEProducer() { PowerOff(); }
 
+  virtual void OnInitialise(const eudaq::Configuration &init);
   virtual void OnConfigure(const eudaq::Configuration &param);
   virtual void OnStartRun(unsigned param);
   virtual void OnStopRun();

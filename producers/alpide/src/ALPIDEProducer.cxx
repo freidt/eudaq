@@ -866,9 +866,11 @@ void ALPIDEProducer::OnStartRun(unsigned param) {
 
   SetConnectionState(eudaq::ConnectionState::STATE_RUNNING, "Running");
   EUDAQ_INFO("Running");
+  */
 }
 
 void ALPIDEProducer::OnStopRun() {
+/*
   std::cout << "Stop Run" << std::endl;
   {
     SimpleLock lock(m_mutex);
@@ -956,9 +958,11 @@ void ALPIDEProducer::OnStopRun() {
   }
 
   SetConnectionState(eudaq::ConnectionState::STATE_UNCONF, "Run Stopped");
+  */
 }
 
 void ALPIDEProducer::OnTerminate() {
+/*
   std::cout << "Terminate" << std::endl;
   PowerOffTestSetup();
   std::cout << "All boards powered off" << std::endl;

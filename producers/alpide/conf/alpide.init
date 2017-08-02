@@ -7,11 +7,8 @@
 
 [LogCollector]
 
-[Producer.Example]
-InitParamter = 123
-
 [Producer.TLU]
 ErrorHandler=2
 
-[Producer.pALPIDEfs]
+[Producer.ALPIDE]
 # nothing to be done for now

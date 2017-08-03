@@ -54,14 +54,39 @@ ALPIDESetup::~ALPIDESetup() {
 }
 
 void ALPIDESetup::StartDAQ() {
-  //m_daq_board->StartTrigger();
-  //m_daq_board->WriteBusyOverrideReg(true);
+  switch(m_boardType) {
+  case boardDAQ:
+    TReadoutBoardDAQ* daq_board = dynamic_cast<TReadoutBoardDAQ*>(m_boards[0]);
+    daq_board->StartTrigger();
+    daq_board->WriteBusyOverrideReg(true);
+    break;
+  case boardMOSAIC:
+
+    break;
+  case boardRU:
+
+    break;
+  default:
+  }
+
 }
 
 void ALPIDESetup::StopDAQ() {
-  //m_daq_board->WriteBusyOverrideReg(false);
-  //eudaq::mSleep(100);
-  //m_daq_board->StopTrigger();
+    switch(m_boardType) {
+  case boardDAQ:
+    TReadoutBoardDAQ* daq_board = dynamic_cast<TReadoutBoardDAQ*>(m_boards[0]);
+    daq_board->WriteBusyOverrideReg(false);
+    eudaq::mSleep(100);
+    daq_board->StopTrigger();
+    break;
+  case boardMOSAIC:
+
+    break;
+  case boardRU:
+
+    break;
+  default:
+  }
 }
 
 void ALPIDESetup::DeleteNextEvent() {
@@ -149,7 +174,18 @@ void ALPIDESetup::Push(SingleEvent* ev) {
 }
 
 void ALPIDESetup::Configure(std::string configFile) {
-
   initSetup(m_config, m_boards, m_boardType, m_chips, configFile.data());
 
+  switch(m_boardType) {
+  case boardDAQ:
+
+    break;
+  case boardMOSAIC:
+
+    break;
+  case boardRU:
+
+    break;
+  default:
+  }
 }

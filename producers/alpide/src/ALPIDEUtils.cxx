@@ -7,6 +7,7 @@
 
 // new-alpide-software
 #include "TConfig.h"
+#include "SetupHelpers.h"
 
 
 ALPIDESetup::ALPIDESetup(int id, int debuglevel, TConfig* config,
@@ -26,8 +27,27 @@ ALPIDESetup::ALPIDESetup(int id, int debuglevel, TConfig* config,
   , m_timestamp_reference((uint64_t)-1)
 {
   //m_last_trigger_id = m_daq_board->GetNextEventId();
-  Print(0, "Starting with last event id: %lu", m_last_trigger_id);
+  //Print(0, "Starting with last event id: %lu", m_last_trigger_id);
 }
+
+ALPIDESetup::ALPIDESetup(int id, int debuglevel, std::string configFile,
+                         std::vector<unsigned char>* raw_data/*=0x0*/)
+  : m_id(id)
+  , m_debuglevel(debuglevel)
+  , m_config(0x0)
+  , m_boards(0x0)
+  , m_boardType(0x0)
+  , m_chips(0x0)
+  , m_queue()
+  , m_queue_size(0)
+  , m_raw_data(raw_data)
+  , m_last_trigger_id((uint64_t)-1)
+  , m_timestamp_reference((uint64_t)-1)
+{
+  Configure(configFile);
+}
+
+
 
 ALPIDESetup::~ALPIDESetup() {
   eudaq::mSleep(5000);
@@ -126,4 +146,10 @@ void ALPIDESetup::Push(SingleEvent* ev) {
   m_queue_size += ev->m_length;
   if (m_debuglevel > 2)
     Print(0, "Pushed events. Current queue size: %lu", m_queue.size());
+}
+
+void ALPIDESetup::Configure(std::string configFile) {
+
+  initSetup(m_config, m_boards, m_boardType, m_chips, configFile.data());
+
 }

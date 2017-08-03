@@ -40,9 +40,10 @@ public:
         std::vector<TReadoutBoard *> * boards, TBoardType* boardType,
         std::vector<TAlpide *> * chips,
         std::vector<unsigned char>* raw_data=0x0);
+  ALPIDESetup(int id, int debuglevel, std::string configFile,
+        std::vector<unsigned char>* raw_data=0x0);
   ~ALPIDESetup();
 
-  void Configure();
   void StartDAQ();
   void StopDAQ();
   void DeleteNextEvent();
@@ -58,6 +59,8 @@ protected:
              uint64_t value2 = -1, uint64_t value3 = -1, uint64_t value4 = -1);
 
   void Push(SingleEvent* ev);
+  void Configure(std::string configFile);
+
 
   // configuration
   int m_id;

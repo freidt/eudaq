@@ -6,9 +6,6 @@ export TLUIP=$HOSTIP
 
 [ "$1" != "" ] && RCPORT=$1
 
-#export /opt/products/root/root_v5.26.00
-#export HOSTNAME=$HOSTIP
-
 cd `dirname $0`
 CURR_DIR=$(pwd)
 export SCRIPT_DIR="`pwd`/producers/alpide/scripts"
@@ -39,10 +36,6 @@ chmod a=rw data/run*.raw
 printf '\033[22;32m\t ...Done!\033[0m \n'
 cd bin
 ######################################################################
-#printf '\033[22;33m\t Making sure TLU is accessible  \033[0m \n'
-#./tlunoroot.exe
-#sleep 1
-######################################################################
 #=====================================================================
 printf '\033[22;33m\t Starting Subprocesses \033[0m \n'
 #=====================================================================
@@ -67,14 +60,6 @@ sleep 2
 
 printf '\033[22;33m\t  ALPIDE Producer \033[0m \n'
 xterm -sb -sl 1000 -geom 80x20-480-300 -T 'ALPIDE Producer' -e 'unbuffer ./ALPIDEProducer.exe -r tcp://$TLUIP:$RCPORT -d 0 2>&1 | tee ${LOG_DIR}/${LOG_PREFIX}' &
-
-# printf '\033[22;33m\t  ALPIDE Producer \033[0m \n'
-# xterm -sb -sl 1000 -geom 80x20-480-300 -T 'ALPIDE Producer' -e './ALPIDEProducer.exe -r tcp://$TLUIP:$RCPORT -d 0 -n alpide1' &
-# printf '\033[22;33m\t  ALPIDE Producer \033[0m \n'
-# xterm -sb -sl 1000 -geom 80x20-480-300 -T 'ALPIDE Producer' -e './ALPIDEProducer.exe -r tcp://$TLUIP:$RCPORT -d 0 -n alpide2' &
-
-
-# ./ALPIDEProducer.exe -r tcp://$TLUIP:$RCPORT -d 3 > out 2>&1
 
 #####################################################################
 ######################################################################

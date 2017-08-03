@@ -16,8 +16,8 @@ public:
       m_oos_ev(0), m_last_oos_ev(0), m_timestamp_last(0x0), m_timestamp_full(0x0),
       m_done(false), m_running(false), m_stopping(false), m_flushing(false),
       m_configured(false), m_firstevent(false), m_setups(0), m_next_event(0),
-      m_debuglevel(debuglevel), m_raw_data(0x0), m_mutex(), m_param(), m_nDevices(0),
-      m_status_interval(-1), m_full_config_v4(), m_ignore_trigger_ids(true),
+      m_debuglevel(debuglevel), m_raw_data(0x0), m_mutex(), m_param(), m_nSetups(0),
+      m_status_interval(-1), m_full_config(), m_ignore_trigger_ids(true),
       m_recover_outofsync(true), m_chip_type(0x0),
       m_strobe_length(0x0), m_strobeb_length(0x0), m_trigger_delay(0x0),
       m_readout_delay(0x0), m_chip_readoutmode(0x0), m_back_bias_voltage(-1),
@@ -41,6 +41,7 @@ protected:
   void SetBackBiasVoltage(const eudaq::Configuration &param);
   void ControlLinearStage(const eudaq::Configuration &param);
   void ControlRotaryStages(const eudaq::Configuration &param);
+  void ConfigurePulser(const eudaq::Configuration &param);
   //bool ConfigChip(int id, TpAlpidefs *dut, std::string configFile);
   int BuildEvent();
   void SendEOR();
@@ -68,9 +69,9 @@ protected:
 
   // config
   eudaq::Configuration m_param;
-  int m_nDevices;
+  int m_nSetups;
   int m_status_interval;
-  std::string m_full_config_v4;
+  std::string m_full_config;
   bool m_ignore_trigger_ids;
   bool m_recover_outofsync;
   int* m_chip_type;

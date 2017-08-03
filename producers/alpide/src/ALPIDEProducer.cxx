@@ -68,7 +68,6 @@ void ALPIDEProducer::OnInitialise(const eudaq::Configuration &init) {
   }
 }
 
-
 void ALPIDEProducer::OnConfigure(const eudaq::Configuration &param) {
   /*
   {
@@ -77,9 +76,80 @@ void ALPIDEProducer::OnConfigure(const eudaq::Configuration &param) {
   }
   */
   try {
-    std::cout << "Configuring (" << param.Name << ") ..." << std::endl;
+    std::cout << "Configuring (" << param.Name() << ") ..." << std::endl;
+    EUDAQ_INFO("Configuring (" + param.Name() + ")");
+
+
     if (&param!=&m_param) m_param = param; // store configuration (needed for reconfiguration)
 
+    m_status_interval = param.Get("StatusInterval", -1);
+    m_full_config     = param.Get("FullConfig", "");
+
+    const int nSetups = param.Get("Setups", 1); // number of setups
+    if (m_nSetups != 0 && m_nSetups != nSetups) {
+      if (m_setups) {
+        for (int iSetup = 0; iSetup < nSetups; ++iSetup) {
+          delete m_setups[iSetup];
+          m_setups[iSetup] = 0x0;
+        }
+        delete[] m_setups;
+        m_setups = 0x0;
+      }
+      if (!m_next_event) {
+        for (int iSetup = 0; iSetup < nSetups; ++iSetup) {
+          delete m_next_event[iSetup];
+          m_next_event[iSetup] = 0x0;
+        }
+        delete[] m_next_event;
+        m_next_event = 0x0;
+      }
+    }
+    m_nSetups = nSetups;
+
+
+    if (!m_next_event) {
+      m_next_event = new SingleEvent*[m_nSetups];
+      for (int i = 0; i < m_nSetups; ++i) {
+        m_next_event[i] = 0x0;
+      }
+    }
+    if (!m_setups) {
+      m_setups = new ALPIDESetup*[m_nSetups];
+      for (int i = 0; i < m_nSetups; ++i) {
+        m_setups[i] = 0x0;
+      }
+    }
+    if (!m_raw_data) {
+      m_raw_data = new std::vector<unsigned char>*[m_nSetups];
+      for (int i = 0; i < m_nSetups; ++i) {
+      #ifdef DEBUG_USB
+        m_raw_data[i] = new std::vector<unsigned char>();
+      #else
+        m_raw_data[i] = 0x0;
+      #endif
+      }
+    }
+
+    // Control external devices
+    SetBackBiasVoltage(param);
+    ControlLinearStage(param);
+    ControlRotaryStages(param);
+    ConfigurePulser(param);
+
+    const size_t buffer_length = 1000;
+    char buffer[buffer_length];
+
+    for (int i = 0; i < m_nSetups; ++i) {
+      if (m_setups[i]) {
+        delete m_setups[i];
+        m_setups[i] = 0x0;
+      }
+      // configuration
+      snprintf(buffer, buffer_length, "Config_File_%d", i);
+      std::string configFile = param.Get(buffer, "");
+
+      m_setups[i] = new ALPIDESetup(i, m_debuglevel, configFile, m_raw_data[i]);
+    }
 
 
     SetConnectionState(eudaq::ConnectionState::STATE_CONF, "Configured (" + param.Name() + ")");
@@ -100,106 +170,19 @@ void ALPIDEProducer::OnConfigure(const eudaq::Configuration &param) {
       EUDAQ_ERROR(msg.data());
     }
   }
-  EUDAQ_INFO("Configuring (" + param.Name() + ")");
-  //SetStatus(eudaq::Status::LVL_OK, "Configuring (" + param.Name() + ")");
 
-  m_status_interval = param.Get("StatusInterval", -1);
 
-  const int delay = param.Get("QueueFullDelay", 0);
-  const unsigned long queue_size = param.Get("QueueSize", 0) * 1024 * 1024;
 
-  if (param.Get("CheckTriggerIDs", 0) == 1)
-    m_ignore_trigger_ids = false;
-
-  if (param.Get("DisableRecoveryOutOfSync", 0) == 1)
-    m_recover_outofsync = false;
-
-  if (param.Get("MonitorPSU", 0) == 1)
-    m_monitor_PSU = true;
-
-  m_n_trig = param.Get("NTrig", -1);
-  m_period = param.Get("Period", -1.);
-
-  const int nDevices = param.Get("Devices", 1);
-  if (m_nDevices == 0 || m_nDevices == nDevices)
-    m_nDevices = nDevices;
-  else {
-    const char* error_msg =
-      "Unsupported attempt to change the number of devices!";
-    std::cout << error_msg << std::endl;
-    EUDAQ_ERROR(error_msg);
-    SetConnectionState(eudaq::ConnectionState::STATE_ERROR, error_msg);
-    return;
-  }
-
-  m_full_config_v1 = param.Get("FullConfigV1", param.Get("FullConfig", ""));
-  m_full_config_v2 = param.Get("FullConfigV2", "");
-  m_full_config_v3 = param.Get("FullConfigV3", "");
-  m_full_config_v4 = param.Get("FullConfigV4", "");
-
-  if (!m_next_event) {
-    m_next_event = new SingleEvent*[m_nDevices];
-    for (int i = 0; i < m_nDevices; i++) {
-      m_next_event[i] = 0x0;
-    }
-  }
-  if (!m_chip_type)
-    m_chip_type = new int[m_nDevices];
-  if (!m_strobe_length)
-    m_strobe_length = new int[m_nDevices];
-  if (!m_strobeb_length)
-    m_strobeb_length = new int[m_nDevices];
-  if (!m_trigger_delay)
-    m_trigger_delay = new int[m_nDevices];
-  if (!m_readout_delay)
-    m_readout_delay = new int[m_nDevices];
-  if (!m_timestamp_last)
-    m_timestamp_last = new uint64_t[m_nDevices];
-  if (!m_timestamp_full)
-    m_timestamp_full = new uint64_t[m_nDevices];
-  if (!m_chip_readoutmode)
-    m_chip_readoutmode = new int[m_nDevices];
-  if (!m_setups) {
-    m_setups = new ALPIDESetup*[m_nDevices];
-    for (int i = 0; i < m_nDevices; i++) {
-      m_setups[i] = 0x0;
-    }
-  }
-  if (!m_raw_data) {
-    m_raw_data = new std::vector<unsigned char>*[m_nDevices];
-    for (int i = 0; i < m_nDevices; i++) {
-      #ifdef DEBUG_USB
-      m_raw_data[i] = new std::vector<unsigned char>();
-      #else
-      m_raw_data[i] = 0x0;
-      #endif
-    }
-  }
-
-  // Set back-bias voltage
-  SetBackBiasVoltage(param);
-  // Power supply monitoring
-  if (m_monitor_PSU) {
-    system("${SCRIPT_DIR}/meas.sh ${SCRIPT_DIR} ${LOG_DIR}/$(date "
-           "+%s)-meas-tab ${LOG_DIR}/$(date +%s)-meas-log "
-           "${SCRIPT_DIR}/meas-pid.txt");
-  }
-  // Move the linear stage
-  //ControlLinearStage(param);
-  ControlRotaryStages(param);
 
   if (!InitialiseTestALPIDESetup(param))
     return;
 
-  for (int i = 0; i < m_nDevices; i++) {
+  for (int i = 0; i < m_nSetups; ++i) {
     TDAQBoard* daq_board = m_setups[i]->GetDAQBoard();
     daq_board->WriteBusyOverrideReg(false);
   }
 
-  if (!DoSCurveScan(param))
-    return;
-
-  for (int i = 0; i < m_nDevices; i++) {
+  for (int i = 0; i < m_nSetups; ++i) {
     TpAlpidefs* dut = m_setups[i]->GetDUT();
     TDAQBoard* daq_board = m_setups[i]->GetDAQBoard();
     const size_t buffer_size = 100;
@@ -241,21 +224,6 @@ void ALPIDEProducer::OnConfigure(const eudaq::Configuration &param) {
     if (mask_pixels)
       dut->MaskNoisyPixels();
 
-    // triggering configuration per layer
-    sprintf(buffer, "StrobeLength_%d", i);
-    m_strobe_length[i] = param.Get(buffer, param.Get("StrobeLength", 10));
-    sprintf(buffer, "StrobeBLength_%d", i);
-    m_strobeb_length[i] = param.Get(buffer, param.Get("StrobeBLength", 20));
-    sprintf(buffer, "ReadoutDelay_%d", i);
-    m_readout_delay[i] = param.Get(buffer, param.Get("ReadoutDelay", 10));
-    sprintf(buffer, "TriggerDelay_%d", i);
-    m_trigger_delay[i] = param.Get(buffer, param.Get("TriggerDelay", 75));
-    sprintf(buffer, "ChipReadoutMode_%d", i);
-    m_chip_readoutmode[i] = param.Get(buffer, param.Get("ChipReadoutMode", 2));
-
-    // data taking configuration
-    // PrepareEmptyReadout
-
     if (!(strcmp(dut->GetClassName(), "TpAlpidefs3")) || !(strcmp(dut->GetClassName(), "TpAlpidefs4")) ) {
       //std::cout << "This is " << dut->GetClassName() << std::endl;
       daq_board->ConfigureReadout(3, true, true);
@@ -286,25 +254,10 @@ void ALPIDEProducer::OnConfigure(const eudaq::Configuration &param) {
   }
 
 
-  // Control pulser for continuous integration testing
-  if (m_n_trig>0 && m_period>0) {
-    char cmd[100];
-    snprintf(cmd, 100, "${SCRIPT_DIR}/pulser.py 1 %e %d", m_period, m_n_trig);
-    int attempts = 0;
-    bool success = false;
-    while (!success && attempts++<5) {
-      success = (system(cmd)==0);
-    }
-    if (!success) {
-      std::string msg = "Failed to configure the pulser!";
-      EUDAQ_ERROR(msg.data());
-      SetConnectionState(eudaq::ConnectionState::STATE_ERROR, msg.data());
-    }
-  }
 
 
   if (m_debuglevel > 3) {
-    for (int i = 0; i < m_nDevices; i++) {
+    for (int i = 0; i < m_nSetups; ++i) {
       std::cout << "Reader " << i << ":" << std::endl;
       m_setups[i]->PrintDAQboardStatus();
     }
@@ -328,12 +281,12 @@ void ALPIDEProducer::OnConfigure(const eudaq::Configuration &param) {
 bool ALPIDEProducer::Initialise(const eudaq::Configuration &param) {
   /*
   if (!m_configured) {
-    m_nDevices = param.Get("Devices", 1);
+    m_nSetups = param.Get("Devices", 1);
 
     const int delay = param.Get("QueueFullDelay", 0);
     const unsigned long queue_size = param.Get("QueueSize", 0) * 1024 * 1024;
 
-    for (int idev = 0; idev < m_nDevices; idev++) {
+    for (int idev = 0; idev < m_nSetups; idev++) {
       sprintf(mybuffer, "BoardAddress_%d", idev);
       int board_address = param.Get(mybuffer, -1);
 
@@ -368,11 +321,11 @@ bool ALPIDEProducer::Initialise(const eudaq::Configuration &param) {
     std::cout << "Found " << m_testsetup->GetNDAQBoards() << " DAQ boards."
               << std::endl;
 
-    if (m_testsetup->GetNDAQBoards() < m_nDevices) {
+    if (m_testsetup->GetNDAQBoards() < m_nSetups) {
       char msg[100];
       sprintf(msg, "Not enough devices connected. Configuration requires %d "
               "devices, but only %d present.",
-              m_nDevices, m_testsetup->GetNDAQBoards());
+              m_nSetups, m_testsetup->GetNDAQBoards());
       std::cerr << msg << std::endl;
       EUDAQ_ERROR(msg);
       SetConnectionState(eudaq::ConnectionState::STATE_ERROR, msg);
@@ -380,7 +333,7 @@ bool ALPIDEProducer::Initialise(const eudaq::Configuration &param) {
     }
 
     m_testsetup->AddDUTs(config);
-    for (int i = 0; i < m_nDevices; i++) {
+    for (int i = 0; i < m_nSetups; ++i) {
       TpAlpidefs* dut = 0;
       TDAQBoard* daq_board = 0;
 
@@ -458,7 +411,7 @@ bool ALPIDEProducer::Initialise(const eudaq::Configuration &param) {
 bool ALPIDEProducer::PowerOff() {
   /*
   std::cout << "Powering off test setup" << std::endl;
-  for (int i = 0; i < m_nDevices; i++) {
+  for (int i = 0; i < m_nSetups; ++i) {
     if (m_setups[i]) {
       TDAQBoard* daq_board = m_setups[i]->GetDAQBoard();
       m_setups[i]->Stop();
@@ -596,6 +549,27 @@ void ALPIDEProducer::ControlLinearStage(const eudaq::Configuration &param) {
   }
 }
 
+void ALPIDEProducer::ConfigurePulser(const eudaq::Configuration &param) {
+  m_n_trig = param.Get("NTrig", -1);
+  m_period = param.Get("Period", -1.);
+
+  // Control pulser for continuous integration testing
+  if (m_n_trig>0 && m_period>0) {
+    char cmd[100];
+    snprintf(cmd, 100, "${SCRIPT_DIR}/pulser.py 1 %e %d", m_period, m_n_trig);
+    int attempts = 0;
+    bool success = false;
+    while (!success && attempts++<5) {
+      success = (system(cmd)==0);
+    }
+    if (!success) {
+      std::string msg = "Failed to configure the pulser!";
+      EUDAQ_ERROR(msg.data());
+      SetConnectionState(eudaq::ConnectionState::STATE_ERROR, msg.data());
+    }
+  }
+}
+
 void ALPIDEProducer::OnStartRun(unsigned param) {
   /*
   long wait_cnt = 0;
@@ -633,7 +607,7 @@ void ALPIDEProducer::OnStartRun(unsigned param) {
   // the queues should be empty at this stage, if not flush them
   PrintQueueStatus();
   bool queues_empty = true;
-  for (int i = 0; i < m_nDevices; i++) {
+  for (int i = 0; i < m_nSetups; ++i) {
     while (m_setups[i]->GetQueueLength() > 0) {
       m_setups[i]->DeleteNextEvent();
       queues_empty = false;
@@ -643,7 +617,7 @@ void ALPIDEProducer::OnStartRun(unsigned param) {
     EUDAQ_INFO( "Queues not empty on SOR, queues were flushed.");
   }
   eudaq::RawDataEvent bore(eudaq::RawDataEvent::BORE(EVENT_TYPE, m_run));
-  bore.SetTag("Devices", m_nDevices);
+  bore.SetTag("Devices", m_nSetups);
   bore.SetTag("DataVersion", 3); // complete DAQ board event
 
   // driver version
@@ -654,7 +628,7 @@ void ALPIDEProducer::OnStartRun(unsigned param) {
   std::vector<char> SCS_points_block;
 
   // read configuration, dump to XML string
-  for (int i = 0; i < m_nDevices; i++) {
+  for (int i = 0; i < m_nSetups; ++i) {
     std::string configstr;
 
     if (m_chip_type[i] == 4) configstr = m_full_config_v4;
@@ -756,12 +730,12 @@ void ALPIDEProducer::OnStartRun(unsigned param) {
 
   //Configuration is done, Read DAC Values and send to log
 
-  for (int i = 0; i < m_nDevices; i++) {
+  for (int i = 0; i < m_nSetups; ++i) {
     m_timestamp_last[i]      = 0;
   }
 
 
-  for (int i = 0; i < m_nDevices; i++) {
+  for (int i = 0; i < m_nSetups; ++i) {
     TDAQBoard* daq_board = m_setups[i]->GetDAQBoard();
     std::cout << "Reading Device:" << i << " ADCs" <<  std::endl;
     daq_board->ReadAllADCs();
@@ -773,7 +747,7 @@ void ALPIDEProducer::OnStartRun(unsigned param) {
     SimpleLock lock(m_mutex);
     m_running = true;
   }
-  for (int i = m_nDevices-1; i >= 0; --i) {
+  for (int i = m_nSetups-1; i >= 0; --i) {
     m_setups[i]->SetRunning(true);
     m_setups[i]->StartDAQ();
   }
@@ -793,7 +767,7 @@ void ALPIDEProducer::OnStopRun() {
     m_stopping = true;
     m_flushing = true;
   }
-  for (int i = m_nDevices-1; i >= 0; --i) { // stop the event polling loop
+  for (int i = m_nSetups-1; i >= 0; --i) { // stop the event polling loop
 
 #ifdef DEBUG_USB
     char tmp[50];
@@ -814,7 +788,7 @@ void ALPIDEProducer::OnStopRun() {
 
   unsigned long count = 0;
   bool resetRequired = false;
-  for (int i = 0; i < m_nDevices; i++) { // wait until all read transactions are done
+  for (int i = 0; i < m_nSetups; ++i) { // wait until all read transactions are done
     while ((m_setups[i]->IsReading() || m_setups[i]->IsFlushing()) && count < 1000) {
       if (count++ % 250 == 0) {
         std::cout << "Reader is still reading, waiting.. " << std::endl;
@@ -864,7 +838,7 @@ void ALPIDEProducer::OnStopRun() {
   }
 
   if (resetRequired) {
-    for (int i = m_nDevices-1; i >= 0; --i) { // stop the event polling loop
+    for (int i = m_nSetups-1; i >= 0; --i) { // stop the event polling loop
       m_setups[i]->StopDAQ();
       m_setups[i]->SetRunning(false);
     }
@@ -954,7 +928,7 @@ void ALPIDEProducer::Loop() {
             uint64_t timestamp = 0;
             int address = 0x207; // timestamp upper 24bit
             bool found_busy = false;
-            for (int i = 0; i < m_nDevices; i++) {
+            for (int i = 0; i < m_nSetups; ++i) {
               if (m_debuglevel > 3){
                 std::cout << "Reader " << i << ":" << std::endl;
                 m_setups[i]->PrintDAQboardStatus();
@@ -992,7 +966,7 @@ void ALPIDEProducer::Loop() {
           last_status = time(0);
 
           std::vector<int> queueLengths;
-          for (int i = 0; i < m_nDevices; i++) {
+          for (int i = 0; i < m_nSetups; ++i) {
             queueLengths.push_back(m_setups[i]->GetQueueLength());
           }
           std::sort(queueLengths.begin(), queueLengths.end());
@@ -1002,7 +976,7 @@ void ALPIDEProducer::Loop() {
             std::string str = "DAQ boards queues differ by more than 1000 events";
             EUDAQ_ERROR(str);
             //SetConnectionState(eudaq::ConnectionState::STATE_ERROR, str);
-            for (int i = 0; i < m_nDevices; i++) {
+            for (int i = 0; i < m_nSetups; ++i) {
               std::cout << "Reader " << i << ":" << std::endl;
               m_setups[i]->PrintDAQboardStatus();
               reconfigure = true;
@@ -1021,7 +995,7 @@ void ALPIDEProducer::Loop() {
       std::string str = "DAQ boards stay busy";
       EUDAQ_ERROR(str);
       //SetConnectionState(eudaq::ConnectionState::STATE_ERROR, str);
-      for (int i = 0; i < m_nDevices; i++) {
+      for (int i = 0; i < m_nSetups; ++i) {
         std::cout << "Reader " << i << ":" << std::endl;
         m_setups[i]->PrintDAQboardStatus();
       }
@@ -1032,7 +1006,7 @@ void ALPIDEProducer::Loop() {
       std::string str = "Out-of-sync recovery fails";
       EUDAQ_ERROR(str);
       //SetConnectionState(eudaq::ConnectionState::STATE_ERROR, str);
-      for (int i = 0; i < m_nDevices; i++) {
+      for (int i = 0; i < m_nSetups; ++i) {
         std::cout << "Reader " << i << ":" << std::endl;
         m_setups[i]->PrintDAQboardStatus();
       }
@@ -1045,7 +1019,7 @@ void ALPIDEProducer::Loop() {
       std::cout << msg << std::endl;
       //SetStatus(eudaq::Status::LVL_WARN, msg.data());
       EUDAQ_WARN(msg);
-      for (int i = 0; i < m_nDevices; i++) { // stop the event polling loop
+      for (int i = 0; i < m_nSetups; ++i) { // stop the event polling loop
         m_setups[i]->StopDAQ();
       }
       {
@@ -1060,7 +1034,7 @@ void ALPIDEProducer::Loop() {
 
       // Print queue status and clear them
       PrintQueueStatus();
-      for (int i = 0; i < m_nDevices; i++) {
+      for (int i = 0; i < m_nSetups; ++i) {
         while (m_setups[i]->GetQueueLength() > 0) {
           m_setups[i]->DeleteNextEvent();
         }
@@ -1069,7 +1043,7 @@ void ALPIDEProducer::Loop() {
         SimpleLock lock(m_mutex);
         m_running = true;
       }
-      for (int i = 0; i < m_nDevices; i++) {
+      for (int i = 0; i < m_nSetups; ++i) {
         m_setups[i]->SetRunning(true);
         m_setups[i]->StartDAQ();
       }
@@ -1110,14 +1084,14 @@ int ALPIDEProducer::BuildEvent() {
   std::vector<int64_t> timestamps;
   std::vector<int64_t> timestamps_last;
 
-  for (int i = 0; i < m_nDevices; i++) {
+  for (int i = 0; i < m_nSetups; ++i) {
     if (m_next_event[i] == 0)
       m_next_event[i] = m_setups[i]->PopNextEvent();
     if (m_next_event[i] == 0)
       return 0;
   }
 
-  for (int i = 0; i < m_nDevices; i++) {
+  for (int i = 0; i < m_nSetups; ++i) {
     int64_t timestamp_tmp = ((int64_t)m_next_event[i]->m_timestamp | (int64_t)m_timestamp_full[i])-(int64_t)m_next_event[i]->m_timestamp_reference;
     timestamp_tmp &= timestamp_mask;
 
@@ -1133,8 +1107,8 @@ int ALPIDEProducer::BuildEvent() {
 
 
   // sort the plane data, plane with largest timestamp first
-  for (int i = 0; i < m_nDevices-1; i++) {
-    for (int j = 0; j < m_nDevices-1; j++) {
+  for (int i = 0; i < m_nSetups-1; ++i) {
+    for (int j = 0; j < m_nSetups-1; j++) {
       //if ((timestamps[j]-timestamps_last[j])&timestamp_mask<(timestamps[j+1]-timestamps_last[j+1])&timestamp_mask) {
       if (trigger_ids[j]<trigger_ids[j+1]) {
         std::iter_swap(planes.begin()+j,          planes.begin()+j+1);
@@ -1148,7 +1122,7 @@ int ALPIDEProducer::BuildEvent() {
 #if 0
   std::cout << "m_ev\ti\tplanes[i]\ttrigger_ids[i]\tts[i]\tts_last[i]\tm_ts_last[i]\tm_next_event[planes[i]]->m_ts\tm_next_event[planes[i]]->m_timestamp_reference" << std::endl;
 
-  for (int i = 0; i < m_nDevices; i++) {
+  for (int i = 0; i < m_nSetups; ++i) {
     std::cout << m_ev << '\t' << i << '\t' << planes[i] << '\t' << trigger_ids[i] << '\t' << timestamps[i] << '\t' << timestamps_last[i] << '\t' << m_timestamp_last[i] << '\t'
               << std::hex << "0x" << m_next_event[planes[i]]->m_timestamp << "\t0x" << m_next_event[planes[i]]->m_timestamp_reference << std::dec << std::endl;
   }
@@ -1162,14 +1136,14 @@ int ALPIDEProducer::BuildEvent() {
     std::cout << "Sending event with trigger id " << trigger_id << std::endl;
 
   // detect inconsistency in timestamp
-  bool* bad_plane = new bool[m_nDevices];
-  for (int i = 0; i < m_nDevices; i++)
+  bool* bad_plane = new bool[m_nSetups];
+  for (int i = 0; i < m_nSetups; ++i)
     bad_plane[i] = false;
 
   bool timestamp_error_zero = false;
   bool timestamp_error_ref  = false;
   bool timestamp_error_last = false;
-  for (int i = 1; i < m_nDevices; i++) {
+  for (int i = 1; i < m_nSetups; ++i) {
     if ((timestamps[i] == 0 && timestamps[0]!=0) || (timestamps[i] == 0 && timestamps[0]!=0)) {
       std::cout << "Found plane with timestamp equal to zero, while others aren't zero!" << std::endl;
       timestamp_error_zero = true;
@@ -1209,7 +1183,7 @@ int ALPIDEProducer::BuildEvent() {
         EUDAQ_INFO(str);
       }
     }
-    for (int i = 0; i < m_nDevices; i++) {
+    for (int i = 0; i < m_nSetups; ++i) {
       int64_t diff = (int64_t)timestamps[i] -(int64_t)timestamps[0];
       diff&=timestamp_mask;
 
@@ -1230,7 +1204,7 @@ int ALPIDEProducer::BuildEvent() {
   bool timestamp_error = (timestamp_error_zero || timestamp_error_ref || timestamp_error_last);
 
   if (!timestamp_error) { // store timestamps
-    for (int i = 0; i < m_nDevices; i++) {
+    for (int i = 0; i < m_nSetups; ++i) {
       m_timestamp_last[i] = m_next_event[i]->m_timestamp - m_next_event[i]->m_timestamp_reference;
     }
   }
@@ -1238,7 +1212,7 @@ int ALPIDEProducer::BuildEvent() {
   if (timestamp_error) {
     int result = 0;
     if (m_recover_outofsync) {
-      for (int i = 0; i < m_nDevices; i++) {
+      for (int i = 0; i < m_nSetups; ++i) {
         if (bad_plane[i] && m_next_event[i]) {
           delete m_next_event[i];
           m_next_event[i] = 0x0;
@@ -1260,7 +1234,7 @@ int ALPIDEProducer::BuildEvent() {
   // send all layers in one block
   // also adding reference timestamp
   unsigned long total_size = 0;
-  for (int i = 0; i < m_nDevices; i++) {
+  for (int i = 0; i < m_nSetups; ++i) {
     total_size += 2 + sizeof(uint16_t); //  0 - 3
     total_size += 3 * sizeof(uint64_t); //  4 - 27 (28 bytes)
     total_size += m_next_event[i]->m_length; // X
@@ -1268,7 +1242,7 @@ int ALPIDEProducer::BuildEvent() {
 
   char* buffer = new char[total_size];
   unsigned long pos = 0;
-  for (int i = 0; i < m_nDevices; i++) {
+  for (int i = 0; i < m_nSetups; ++i) {
     buffer[pos++] = 0xff; // 0
     buffer[pos++] = i;    // 1
 
@@ -1301,7 +1275,7 @@ int ALPIDEProducer::BuildEvent() {
   m_firstevent = false;
 
   // clean up
-  for (int i = 0; i < m_nDevices; i++) {
+  for (int i = 0; i < m_nSetups; ++i) {
     if (m_next_event[i]) {
       delete m_next_event[i];
       m_next_event[i] = 0;
@@ -1332,7 +1306,7 @@ void ALPIDEProducer::SendStatusEvent() {
   // temperature readout
   RawDataEvent ev(EVENT_TYPE, m_run, m_ev++);
   ev.SetTag("pALPIDEfs_Type", 1);
-  for (int i = 0; i < m_nDevices; i++) {
+  for (int i = 0; i < m_nSetups; ++i) {
     float temp = m_setups[i]->GetTemperature();
     ev.AddBlock(i, &temp, sizeof(float));
   }
@@ -1342,7 +1316,7 @@ void ALPIDEProducer::SendStatusEvent() {
 }
 
 void ALPIDEProducer::PrintQueueStatus() {
-  for (int i = 0; i < m_nDevices; i++)
+  for (int i = 0; i < m_nSetups; ++i)
     m_setups[i]->PrintQueueStatus();
 }
 

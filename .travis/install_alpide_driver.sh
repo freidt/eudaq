@@ -15,7 +15,7 @@ if [ $TRAVIS_OS_NAME == linux ]; then
 
 	sudo apt-get update && sudo apt-get install -y libtinyxml-dev expect-dev libusb-1.0-0-dev;
 
-	if [ -d "$TRAVIS_BUILD_DIR/extern/new-alpide-software" ]; then
+	if [ -f "$TRAVIS_BUILD_DIR/extern/new-alpide-software/libalpide.so" ]; then
 
 		echo "new-alpide-software source restored from cache as path exists:"
 
@@ -24,19 +24,14 @@ if [ $TRAVIS_OS_NAME == linux ]; then
 	else
 		echo "new-alpide-software source not restored from cache - downloading from CERNBOX and unpacking"
 
-        mkdir new-alpide-software
-
 		wget -O new-alpide-software.zip https://cernbox.cern.ch/index.php/s/TN3BQ8FsOtocpP6/download
 
 		unzip new-alpide-software.zip
 
-		mv new-alpide-software.zip ../
+	    cd new-alpide-software
+
+        make lib
 	fi
-
-	echo `ls `
-
-	cd new-alpide-software
-	make lib
 
 fi
 

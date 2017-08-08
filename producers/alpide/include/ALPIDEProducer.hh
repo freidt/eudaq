@@ -20,9 +20,9 @@ public:
       m_status_interval(-1), m_full_config(), m_ignore_trigger_ids(true),
       m_recover_outofsync(true), m_chip_type(0x0),
       m_strobe_length(0x0), m_strobeb_length(0x0), m_trigger_delay(0x0),
-      m_readout_delay(0x0), m_chip_readoutmode(0x0), m_back_bias_voltage(-1),
+      m_readout_delay(0x0), m_back_bias_voltage(-1),
       m_dut_pos(-1.), m_dut_angle1(-1.), m_dut_angle2(-1.) {}
-  ~ALPIDEProducer() { PowerOff(); }
+  ~ALPIDEProducer() { }
 
   virtual void OnInitialise(const eudaq::Configuration &init);
   virtual void OnConfigure(const eudaq::Configuration &param);
@@ -36,8 +36,6 @@ public:
   void Loop();
 
 protected:
-  bool Initialise(const eudaq::Configuration &param);
-  bool PowerOff();
   void SetBackBiasVoltage(const eudaq::Configuration &param);
   void ControlLinearStage(const eudaq::Configuration &param);
   void ControlRotaryStages(const eudaq::Configuration &param);
@@ -79,7 +77,6 @@ protected:
   int* m_strobeb_length;
   int* m_trigger_delay;
   int* m_readout_delay;
-  int* m_chip_readoutmode;
   float m_back_bias_voltage;
   float m_dut_pos;
   float m_dut_angle1;

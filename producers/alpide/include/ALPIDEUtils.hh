@@ -3,9 +3,9 @@
 #include <vector>
 #include <queue>
 
+#include "TConfig.h"
 #include "TReadoutBoard.h" // TBoardType is a typedef...
 
-class TConfig;
 class TAlpide;
 
 struct SingleEvent {
@@ -46,6 +46,11 @@ public:
 
   void StartDAQ();
   void StopDAQ();
+  void PrintStatus() {}
+  std::string GetConfigurationDump(std::string full_config_template) {}
+  std::string GetSoftwareVersion() { return m_config->GetSoftwareVersion(); }
+  std::string GetFirmwareVersion() { return "NOT IMPLEMENTED"; }
+  int ReadEvents();
   void DeleteNextEvent();
   SingleEvent* PopNextEvent();
   void PrintQueueStatus();
@@ -54,12 +59,11 @@ public:
   }
 
 protected:
-  void Loop();
   void Print(int level, const char* text, uint64_t value1 = -1,
              uint64_t value2 = -1, uint64_t value3 = -1, uint64_t value4 = -1);
 
   void Push(SingleEvent* ev);
-  void Configure(std::string configFile);
+  int  Configure(std::string configFile);
 
 
   // configuration
@@ -71,7 +75,6 @@ protected:
   std::vector<TAlpide *> * m_chips;
 
   std::queue<SingleEvent* > m_queue;
-  unsigned long m_queue_size;
   std::vector<unsigned char>* m_raw_data;
 
   uint64_t m_last_trigger_id;

@@ -21,7 +21,6 @@ ALPIDESetup::ALPIDESetup(int id, int debuglevel, TConfig* config,
   , m_boardType(boardType)
   , m_chips(chips)
   , m_queue()
-  , m_queue_size(0)
   , m_raw_data(raw_data)
   , m_last_trigger_id((uint64_t)-1)
   , m_timestamp_reference((uint64_t)-1)
@@ -39,12 +38,11 @@ ALPIDESetup::ALPIDESetup(int id, int debuglevel, std::string configFile,
   , m_boardType(0x0)
   , m_chips(0x0)
   , m_queue()
-  , m_queue_size(0)
   , m_raw_data(raw_data)
   , m_last_trigger_id((uint64_t)-1)
   , m_timestamp_reference((uint64_t)-1)
 {
-  Configure(configFile);
+  if (Configure(configFile) != 0) throw "Failed to configure the Setup";
 }
 
 
@@ -54,9 +52,9 @@ ALPIDESetup::~ALPIDESetup() {
 }
 
 void ALPIDESetup::StartDAQ() {
-  switch(m_boardType) {
+  TReadoutBoardDAQ* daq_board = dynamic_cast<TReadoutBoardDAQ*>(m_boards->at(0));
+  switch((unsigned long)m_boardType) {
   case boardDAQ:
-    TReadoutBoardDAQ* daq_board = dynamic_cast<TReadoutBoardDAQ*>(m_boards[0]);
     daq_board->StartTrigger();
     daq_board->WriteBusyOverrideReg(true);
     break;
@@ -67,14 +65,14 @@ void ALPIDESetup::StartDAQ() {
 
     break;
   default:
+    return;
   }
-
 }
 
 void ALPIDESetup::StopDAQ() {
-    switch(m_boardType) {
+  TReadoutBoardDAQ* daq_board = dynamic_cast<TReadoutBoardDAQ*>(m_boards->at(0));
+  switch((unsigned long)m_boardType) {
   case boardDAQ:
-    TReadoutBoardDAQ* daq_board = dynamic_cast<TReadoutBoardDAQ*>(m_boards[0]);
     daq_board->WriteBusyOverrideReg(false);
     eudaq::mSleep(100);
     daq_board->StopTrigger();
@@ -86,6 +84,7 @@ void ALPIDESetup::StopDAQ() {
 
     break;
   default:
+    return;
   }
 }
 
@@ -95,7 +94,6 @@ void ALPIDESetup::DeleteNextEvent() {
     return;
   SingleEvent* ev = m_queue.front();
   m_queue.pop();
-  m_queue_size -= ev->m_length;
   delete ev;
 }
 
@@ -104,11 +102,8 @@ SingleEvent* ALPIDESetup::PopNextEvent() {
   if (m_queue.size() > 0) {
     SingleEvent* ev = m_queue.front();
     m_queue.pop();
-    m_queue_size -= ev->m_length;
     if (m_debuglevel > 3)
-      Print(0, "Returning event. Current queue status: %lu elements. Total "
-            "size: %lu",
-            m_queue.size(), m_queue_size);
+      Print(0, "Returning event. Current queue status: %lu elements", m_queue.size());
     return ev;
   }
   if (m_debuglevel > 3)
@@ -118,24 +113,8 @@ SingleEvent* ALPIDESetup::PopNextEvent() {
 
 void ALPIDESetup::PrintQueueStatus() {
   //SimpleLock lock(m_mutex);
-  Print(0, "Queue status: %lu elements. Total size: %lu", m_queue.size(),
-        m_queue_size);
+  Print(0, "Queue status: %lu elements.", m_queue.size());
 }
-
-void ALPIDESetup::Loop() {
-  Print(0, "Loop starting...");
-  while (1) {
-
-    if (m_debuglevel > 10)
-      eudaq::mSleep(1000);
-
-    // no event waiting
-
-  }
-  Print(0, "ThreadRunner stopping...");
-}
-
-
 
 void ALPIDESetup::Print(int level, const char* text, uint64_t value1,
                          uint64_t value2, uint64_t value3, uint64_t value4) {
@@ -168,17 +147,25 @@ void ALPIDESetup::Print(int level, const char* text, uint64_t value1,
 void ALPIDESetup::Push(SingleEvent* ev) {
   //SimpleLock lock(m_mutex);
   m_queue.push(ev);
-  m_queue_size += ev->m_length;
   if (m_debuglevel > 2)
     Print(0, "Pushed events. Current queue size: %lu", m_queue.size());
 }
 
-void ALPIDESetup::Configure(std::string configFile) {
-  initSetup(m_config, m_boards, m_boardType, m_chips, configFile.data());
+int ALPIDESetup::Configure(std::string configFile) {
+  return initSetup(m_config, m_boards, m_boardType, m_chips, configFile.data());
+}
 
-  switch(m_boardType) {
+
+int ALPIDESetup::ReadEvents() {
+  switch((unsigned long)m_boardType) {
   case boardDAQ:
-
+    /*
+    int address = 0x207;
+    uint32_t tmp_value = 0;
+    m_setups[i]->GetDAQBoard()->ReadRegister(address, &tmp_value);
+    tmp_value &= 0xFFC000; // keep only bits not transmitted in the header (47:38)
+    m_timestamp_full[i] = (uint64_t)tmp_value << 24;
+    */
     break;
   case boardMOSAIC:
 
@@ -187,5 +174,7 @@ void ALPIDESetup::Configure(std::string configFile) {
 
     break;
   default:
+    return -1;
   }
+  return -1;
 }

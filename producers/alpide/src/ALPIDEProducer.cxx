@@ -69,12 +69,6 @@ void ALPIDEProducer::OnInitialise(const eudaq::Configuration &init) {
 }
 
 void ALPIDEProducer::OnConfigure(const eudaq::Configuration &param) {
-  /*
-  {
-    SimpleLock lock(m_mutex);
-    m_configuring = true;
-  }
-  */
   try {
     std::cout << "Configuring (" << param.Name() << ") ..." << std::endl;
     EUDAQ_INFO("Configuring (" + param.Name() + ")");
@@ -105,7 +99,6 @@ void ALPIDEProducer::OnConfigure(const eudaq::Configuration &param) {
       }
     }
     m_nSetups = nSetups;
-
 
     if (!m_next_event) {
       m_next_event = new SingleEvent*[m_nSetups];
@@ -149,9 +142,26 @@ void ALPIDEProducer::OnConfigure(const eudaq::Configuration &param) {
       std::string configFile = param.Get(buffer, "");
 
       m_setups[i] = new ALPIDESetup(i, m_debuglevel, configFile, m_raw_data[i]);
+
+      std::cout << "Setup " << i << " configured." << std::endl;
+
+      eudaq::mSleep(10);
+    }
+
+    if (m_debuglevel > 3) {
+      for (int i = 0; i < m_nSetups; ++i) {
+        std::cout << "Setup " << i << ":" << std::endl;
+        m_setups[i]->PrintStatus();
+      }
+    }
+
+    if (!m_configured) {
+      m_configured = true;
+      m_firstevent = true;
     }
 
 
+    EUDAQ_INFO("Configured (" + param.Name() + ")");
     SetConnectionState(eudaq::ConnectionState::STATE_CONF, "Configured (" + param.Name() + ")");
   }
   catch(...) {
@@ -159,287 +169,6 @@ void ALPIDEProducer::OnConfigure(const eudaq::Configuration &param) {
     EUDAQ_ERROR("Initialisation Error - Unknown Exception");
     SetConnectionState(eudaq::ConnectionState::STATE_ERROR, "Initialisation Error");
   }
-/*
-  long wait_cnt = 0;
-  while (IsRunning() || IsStopping()) {
-    eudaq::mSleep(10);
-    ++wait_cnt;
-    if (wait_cnt % 100 == 0) {
-      std::string msg = "Still running, waiting to configure";
-      std::cout << msg << std::endl;
-      EUDAQ_ERROR(msg.data());
-    }
-  }
-
-
-
-
-  if (!InitialiseTestALPIDESetup(param))
-    return;
-
-  for (int i = 0; i < m_nSetups; ++i) {
-    TDAQBoard* daq_board = m_setups[i]->GetDAQBoard();
-    daq_board->WriteBusyOverrideReg(false);
-  }
-
-  for (int i = 0; i < m_nSetups; ++i) {
-    TpAlpidefs* dut = m_setups[i]->GetDUT();
-    TDAQBoard* daq_board = m_setups[i]->GetDAQBoard();
-    const size_t buffer_size = 100;
-    char buffer[buffer_size];
-
-    daq_board->WriteBusyOverrideReg(false);
-
-    // configuration
-    sprintf(buffer, "Config_File_%d", i);
-    std::string configFile = param.Get(buffer, "");
-    if (configFile.length() > 0)
-      if (!ConfigChip(i, dut, configFile))
-        return;
-
-    // noisy and broken pixels
-    dut->SetMaskAllPixels(false); // unmask all pixels
-    dut->ClearNoisyPixels();
-    bool mask_pixels = false;
-    sprintf(buffer, "Noisy_Pixel_File_%d", i);
-    std::string noisyPixels = param.Get(buffer, "");
-    if (noisyPixels.length() > 0) {
-      sprintf(buffer, "Device %d: Reading noisy pixels from file %s", i,
-              noisyPixels.data());
-      EUDAQ_INFO(buffer);
-      dut->ReadNoisyPixelFile(noisyPixels.data());
-      mask_pixels = true;
-    }
-    sprintf(buffer, "Broken_Pixel_File_%d", i);
-    std::string brokenPixels = param.Get(buffer, "");
-    if (brokenPixels.length() > 0) {
-      sprintf(buffer, "Device %d: Reading broken pixels from file %s", i,
-              brokenPixels.data());
-      std::cout << buffer << std::endl;
-      EUDAQ_INFO(buffer);
-      dut->ReadNoisyPixelFile(brokenPixels.data(), true);
-      mask_pixels = true;
-    }
-
-    if (mask_pixels)
-      dut->MaskNoisyPixels();
-
-    if (!(strcmp(dut->GetClassName(), "TpAlpidefs3")) || !(strcmp(dut->GetClassName(), "TpAlpidefs4")) ) {
-      //std::cout << "This is " << dut->GetClassName() << std::endl;
-      daq_board->ConfigureReadout(3, true, true);
-      // buffer depth = 3, 'sampling on rising edge (changed for pALPIDE3)', packet-based mode
-    }
-    else daq_board->ConfigureReadout(1, false, true); //buffer depth = 1, sampling on rising edge, packet-based mode
-    daq_board->ConfigureTrigger(0, m_strobe_length[i], 2, 0,
-                                m_trigger_delay[i]);
-    // PrepareChipReadout
-    dut->PrepareReadout(m_strobeb_length[i], m_readout_delay[i],
-                        (TAlpideMode)m_chip_readoutmode[i]);       // chip_readoutmode = 1 : triggered ; 2 : continuous mode;
-
-    if (delay > 0)
-      m_setups[i]->SetQueueFullDelay(delay);
-    if (queue_size > 0)
-      m_setups[i]->SetMaxQueueSize(queue_size);
-
-    int address = 0x207;
-    uint32_t tmp_value = 0;
-    m_setups[i]->GetDAQBoard()->ReadRegister(address, &tmp_value);
-    //tmp_value &= 0xFFFFFF; // narrow down to 24 bits
-    tmp_value &= 0xFFC000; // keep only bits not transmitted in the header (47:38)
-    m_timestamp_full[i] = (m_chip_type[i] >= 3) ? (uint64_t)tmp_value << 24 : 0x0;
-
-    std::cout << "Device " << i << " configured." << std::endl;
-
-    eudaq::mSleep(10);
-  }
-
-
-
-
-  if (m_debuglevel > 3) {
-    for (int i = 0; i < m_nSetups; ++i) {
-      std::cout << "Reader " << i << ":" << std::endl;
-      m_setups[i]->PrintDAQboardStatus();
-    }
-  }
-
-  if (!m_configured) {
-    m_configured = true;
-    m_firstevent = true;
-  }
-
-*/
-
-  EUDAQ_INFO("Configured (" + param.Name() + ")");
-  SetConnectionState(eudaq::ConnectionState::STATE_CONF, "Configured (" + param.Name() + ")");
-  {
-    SimpleLock lock(m_mutex);
-    m_configuring = false;
-  }
-}
-
-bool ALPIDEProducer::Initialise(const eudaq::Configuration &param) {
-  /*
-  if (!m_configured) {
-    m_nSetups = param.Get("Devices", 1);
-
-    const int delay = param.Get("QueueFullDelay", 0);
-    const unsigned long queue_size = param.Get("QueueSize", 0) * 1024 * 1024;
-
-    for (int idev = 0; idev < m_nSetups; idev++) {
-      sprintf(mybuffer, "BoardAddress_%d", idev);
-      int board_address = param.Get(mybuffer, -1);
-
-      sprintf(mybuffer, "ChipType_%d", idev);
-      std::string ChipType = param.Get(mybuffer, "");
-
-      config->GetBoardConfig(idev)->GeoAdd = board_address;
-
-      if (!ChipType.compare("ALPIDE1")) {
-        m_chip_type[idev] = 1;
-        config->GetBoardConfig(idev)->BoardType = 1;
-        config->GetChipConfig(idev)->ChipType = DUT_ALPIDE1;
-      } else if (!ChipType.compare("ALPIDE2")) {
-        m_chip_type[idev] = 2;
-        config->GetBoardConfig(idev)->BoardType = 2;
-        config->GetChipConfig(idev)->ChipType = DUT_ALPIDE2;
-      } else if (!ChipType.compare("ALPIDE3")) {
-        m_chip_type[idev] = 3;
-        config->GetBoardConfig(idev)->BoardType = 2;
-        config->GetBoardConfig(idev)->EnableDDR = false;
-        config->GetChipConfig(idev)->ChipType = DUT_ALPIDE3;
-      } else if (!ChipType.compare("ALPIDE4") || !ChipType.compare("ALPIDE")) {
-        m_chip_type[idev] = 4;
-        config->GetBoardConfig(idev)->BoardType = 2;
-        config->GetBoardConfig(idev)->EnableDDR = false;
-        config->GetChipConfig(idev)->ChipType = DUT_ALPIDE4;
-      }
-    }
-
-    std::cout << "Searching for DAQ boards " << std::endl;
-    m_testsetup->FindDAQBoards(config);
-    std::cout << "Found " << m_testsetup->GetNDAQBoards() << " DAQ boards."
-              << std::endl;
-
-    if (m_testsetup->GetNDAQBoards() < m_nSetups) {
-      char msg[100];
-      sprintf(msg, "Not enough devices connected. Configuration requires %d "
-              "devices, but only %d present.",
-              m_nSetups, m_testsetup->GetNDAQBoards());
-      std::cerr << msg << std::endl;
-      EUDAQ_ERROR(msg);
-      SetConnectionState(eudaq::ConnectionState::STATE_ERROR, msg);
-      return false;
-    }
-
-    m_testsetup->AddDUTs(config);
-    for (int i = 0; i < m_nSetups; ++i) {
-      TpAlpidefs* dut = 0;
-      TDAQBoard* daq_board = 0;
-
-      const size_t buffer_size = 100;
-      char buffer[buffer_size];
-
-      if (!m_configured) {
-        sprintf(buffer, "BoardAddress_%d", i);
-        int board_address = param.Get(buffer, i);
-
-        // find board
-        int board_no = -1;
-        for (int j = 0; j < m_testsetup->GetNDAQBoards(); j++) {
-          if (m_testsetup->GetDAQBoard(j)->GetBoardAddress() == board_address) {
-            board_no = j;
-            break;
-          }
-        }
-
-        if (board_no == -1) {
-          char msg[100];
-          sprintf(msg, "Device with board address %d not found", board_address);
-          std::cerr << msg << std::endl;
-          EUDAQ_ERROR(msg);
-	  SetConnectionState(eudaq::ConnectionState::STATE_ERROR, msg);
-          return false;
-        }
-        std::cout << "Enabling device " << board_no << std::endl;
-        dut = (TpAlpidefs*)m_testsetup->GetDUT(board_no);
-        daq_board = m_testsetup->GetDAQBoard(board_no);
-        int overflow = 0x0;
-        if (!m_testsetup->PowerOnBoard(board_no, overflow)) {
-          char msg[100];
-          sprintf(msg,
-                  "Powering device with board address %d failed, overflow=0x%x",
-                  board_address, overflow);
-          std::cerr << msg << std::endl;
-          EUDAQ_ERROR(msg);
-          SetConnectionState(eudaq::ConnectionState::STATE_ERROR, msg);
-          return false;
-        }
-
-        if (!m_testsetup->InitialiseChip(board_no, overflow)) {
-          char msg[100];
-          sprintf(
-            msg,
-            "Initialising device with board address %d failed, overflow=0x%x",
-            board_address, overflow);
-          std::cerr << msg << std::endl;
-          EUDAQ_ERROR(msg);
-          SetConnectionState(eudaq::ConnectionState::STATE_ERROR, msg);
-          return false;
-        }
-
-        std::cout << "Device " << i << " with board address " << board_address
-                  << " (delay " << delay << " - queue size " << queue_size
-                  << ") powered." << std::endl;
-
-        m_setups[i] = new ALPIDESetup(i, m_debuglevel, m_testsetup, board_no,
-                                daq_board, dut, m_raw_data[i]);
-        if (m_next_event[i])
-          delete m_next_event[i];
-        m_next_event[i] = 0;
-      } else {
-        std::cout
-          << "Already initialized and powered. Doing only reconfiguration..."
-          << std::endl;
-      }
-    }
-  }
-  */
-  return true;
-}
-
-bool ALPIDEProducer::PowerOff() {
-  /*
-  std::cout << "Powering off test setup" << std::endl;
-  for (int i = 0; i < m_nSetups; ++i) {
-    if (m_setups[i]) {
-      TDAQBoard* daq_board = m_setups[i]->GetDAQBoard();
-      m_setups[i]->Stop();
-      delete m_setups[i];
-      m_setups[i] = 0x0;
-      // power of the DAQboard
-      std::vector<SFieldReg> ADCConfigReg0 =
-        daq_board
-        ->GetADCConfigReg0(); // Get Descriptor Register ADCConfigReg0
-      daq_board->SetPowerOnSequence(1, 0, 0, 0);
-      daq_board->SendADCControlReg(ADCConfigReg0, 1,
-                                   0); // register 0, self shutdown = 1, off = 0
-      daq_board->ResetBoardFPGA(10);
-      daq_board->ResetBoardFX3(10);
-    }
-  }
-  if (m_testsetup) {
-    struct libusb_context* context = m_testsetup->GetContext();
-    delete m_testsetup;
-    m_testsetup = 0x0;
-    libusb_exit(context);
-    m_configured = false;
-  }
-
-  eudaq::mSleep(5000);
-  system("${SCRIPT_DIR}/fx3/program.sh");
-  return true;
-  */
 }
 
 void ALPIDEProducer::SetBackBiasVoltage(const eudaq::Configuration &param) {
@@ -486,7 +215,7 @@ void ALPIDEProducer::ControlRotaryStages(const eudaq::Configuration &param) {
     bool move_failed = false;
     if (system("${SCRIPT_DIR}/zaber.py /dev/ttyZABER0 1 0") == 0) { // init of stage 1 (only one stage sufficient)
       // rotate both stages to home position
-      //system("${SCRIPT_DIR}/zaber.py /dev/ttyZABER0 1 1")
+      //system("${SCRIPT_DIR}/zaber.py /dev/ttyZABER0 1 p1")
       //system("${SCRIPT_DIR}/zaber.py /dev/ttyZABER0 2 1")
 
       // rotate stages
@@ -571,191 +300,75 @@ void ALPIDEProducer::ConfigurePulser(const eudaq::Configuration &param) {
 }
 
 void ALPIDEProducer::OnStartRun(unsigned param) {
-  /*
-  long wait_cnt = 0;
-
-  while (IsStopping()) {
-    eudaq::mSleep(10);
-    ++wait_cnt;
-    if (wait_cnt % 100 == 0) {
-      std::string msg = "Still configuring, waiting to run";
-      std::cout << msg << std::endl;
-      EUDAQ_ERROR(msg.data());
-    }
-  }
-
-  if (!m_configured) {
-    EUDAQ_ERROR("No configuration file loaded and pALPIDE chips not powered on. Failed to start the run!");
-    return;
-  }
-
-  while (IsConfiguring()) {
-    eudaq::mSleep(10);
-    ++wait_cnt;
-    if (wait_cnt % 100 == 0) {
-      std::string msg = "Still configuring, waiting to run";
-      std::cout << msg << std::endl;
-      EUDAQ_ERROR(msg.data());
-    }
-  }
   m_run = param;
   m_ev = 0;
   m_good_ev = 0;
   m_oos_ev = 0;
   m_last_oos_ev = (unsigned)-1;
 
-  // the queues should be empty at this stage, if not flush them
-  PrintQueueStatus();
-  bool queues_empty = true;
-  for (int i = 0; i < m_nSetups; ++i) {
-    while (m_setups[i]->GetQueueLength() > 0) {
-      m_setups[i]->DeleteNextEvent();
-      queues_empty = false;
-    }
-  }
-  if (!queues_empty) {
-    EUDAQ_INFO( "Queues not empty on SOR, queues were flushed.");
-  }
+  const size_t str_len = 100;
+  char tmp[str_len];
+
   eudaq::RawDataEvent bore(eudaq::RawDataEvent::BORE(EVENT_TYPE, m_run));
-  bore.SetTag("Devices", m_nSetups);
-  bore.SetTag("DataVersion", 3); // complete DAQ board event
+  bore.SetTag("Setups", m_nSetups);
+  bore.SetTag("DataVersion", 0); // complete DAQ board event
 
-  // driver version
-  bore.SetTag("Driver_GITVersion", m_testsetup->GetGITVersion());
+  // versions
+  bore.SetTag("Driver_GITVersion", m_setups[0]->GetSoftwareVersion());
   bore.SetTag("EUDAQ_GITVersion", PACKAGE_VERSION);
-
-  std::vector<char> SCS_data_block;
-  std::vector<char> SCS_points_block;
 
   // read configuration, dump to XML string
   for (int i = 0; i < m_nSetups; ++i) {
-    std::string configstr;
+    try {
+      snprintf(tmp, str_len, "Config_%d", i);
+      bore.SetTag(tmp, m_setups[i]->GetConfigurationDump(m_full_config));
 
-    if (m_chip_type[i] == 4) configstr = m_full_config_v4;
-    else if (m_chip_type[i] == 3) configstr = m_full_config_v3;
-    else if (m_chip_type[i] == 2) configstr = m_full_config_v2;
-    else configstr = m_full_config_v1;
-
-    TiXmlDocument doc(configstr.c_str());
-    if (!doc.LoadFile()) {
+    }
+    catch(...) {
       std::string msg = "Failed to load config file: ";
-
-      if (m_chip_type[i] == 4) msg += m_full_config_v4;
-      else if (m_chip_type[i] == 3) msg += m_full_config_v3;
-      else msg += (m_chip_type[i] == 2) ? m_full_config_v2 : m_full_config_v1;
       std::cerr << msg.data() << std::endl;
       EUDAQ_ERROR(msg.data());
       SetConnectionState(eudaq::ConnectionState::STATE_ERROR, msg.data());
       return;
     }
-    // 	std::cout << "PARSEXML READTRUE" << std::endl;
-    m_setups[i]->ParseXML(doc.FirstChild("root")->ToElement(), -1, -1, true);
-
-    std::string configStr;
-    configStr << doc;
-
-    char tmp[100];
-    sprintf(tmp, "Config_%d", i);
-    bore.SetTag(tmp, configStr);
-
-    // store masked pixels
-    const std::vector<TPixHit> pixels = m_setups[i]->GetDUT()->GetNoisyPixels();
-
-    std::string pixelStr;
-    for (int j = 0; j < pixels.size(); j++) {
-      char buffer[50];
-      sprintf(buffer, "%d %d %d\n", pixels.at(j).region, pixels.at(j).doublecol,
-              pixels.at(j).address);
-      pixelStr += buffer;
+    try {
+      // firmware version
+      snprintf(tmp, str_len, "FirmwareVersion_%d", i);
+      bore.SetTag(tmp, m_setups[i]->GetFirmwareVersion());
     }
-
-    sprintf(tmp, "MaskedPixels_%d", i);
-    bore.SetTag(tmp, pixelStr);
-
-    // firmware version
-    sprintf(tmp, "FirmwareVersion_%d", i);
-    bore.SetTag(tmp, m_setups[i]->GetDAQBoard()->GetFirmwareName());
-
-    sprintf(tmp, "ChipType_%d", i);
-    bore.SetTag(tmp, m_chip_type[i]);
-    // readout / triggering settings
-    sprintf(tmp, "StrobeLength_%d", i);
-    bore.SetTag(tmp, m_strobe_length[i]);
-    sprintf(tmp, "StrobeBLength_%d", i);
-    bore.SetTag(tmp, m_strobeb_length[i]);
-    sprintf(tmp, "ReadoutDelay_%d", i);
-    bore.SetTag(tmp, m_readout_delay[i]);
-    sprintf(tmp, "TriggerDelay_%d", i);
-    bore.SetTag(tmp, m_trigger_delay[i]);
-
-    // S-curve scan data
-    SCS_data_block.clear();
-    SCS_data_block.reserve(512 * 1024 * m_SCS_n_steps);
-    SCS_points_block.clear();
-    SCS_points_block.reserve(m_SCS_n_steps);
-    sprintf(tmp, "SCS_%d", i);
-    if (m_do_SCS[i]) {
-      for (int j = 0; j < 512; ++j) {
-        for (int k = 0; k < 1024; ++k) {
-          for (int l = 0; l < m_SCS_n_steps; ++l) {
-            SCS_data_block.push_back(m_SCS_data[i][j][k][l]);
-          }
-        }
-      }
-      for (int j = 0; j < m_SCS_n_steps; ++j) {
-        SCS_points_block.push_back(m_SCS_points[i][j]);
-      }
-      bore.SetTag(tmp, (int)1);
-    } else {
-      bore.SetTag(tmp, (int)0);
+    catch(...) {
+      std::string msg = "Could not determine firmware version";
+      std::cerr << msg.data() << std::endl;
+      EUDAQ_ERROR(msg.data());
+      SetConnectionState(eudaq::ConnectionState::STATE_ERROR, msg.data());
+      return;
     }
-    bore.AddBlock(2 * i, SCS_data_block);
-    bore.AddBlock(2 * i + 1, SCS_points_block);
   }
-
-  // general S-curve scan configuration
-  bore.SetTag("SCSchargeStart", m_SCS_charge_start);
-  bore.SetTag("SCSchargeStop", m_SCS_charge_stop);
-  bore.SetTag("SCSchargeStep", m_SCS_charge_step);
-  bore.SetTag("SCSnEvents", m_SCS_n_events);
-  bore.SetTag("SCSnMaskStages", m_SCS_n_mask_stages);
 
   // back-bias voltage
   bore.SetTag("BackBiasVoltage", m_back_bias_voltage);
   bore.SetTag("DUTposition", m_dut_pos);
+  bore.SetTag("DUTangle1", m_dut_angle1);
+  bore.SetTag("DUTangle2", m_dut_angle2);
 
   // pulser configuration
   bore.SetTag("PulserPeriod", m_period);
   bore.SetTag("PulserNTriggers", m_n_trig);
 
-  //Configuration is done, Read DAC Values and send to log
-
+  //Configuration is done
   for (int i = 0; i < m_nSetups; ++i) {
     m_timestamp_last[i]      = 0;
   }
 
-
-  for (int i = 0; i < m_nSetups; ++i) {
-    TDAQBoard* daq_board = m_setups[i]->GetDAQBoard();
-    std::cout << "Reading Device:" << i << " ADCs" <<  std::endl;
-    daq_board->ReadAllADCs();
-  }
-
   SendEvent(bore);
 
-  {
-    SimpleLock lock(m_mutex);
-    m_running = true;
-  }
   for (int i = m_nSetups-1; i >= 0; --i) {
-    m_setups[i]->SetRunning(true);
     m_setups[i]->StartDAQ();
   }
 
 
   SetConnectionState(eudaq::ConnectionState::STATE_RUNNING, "Running");
   EUDAQ_INFO("Running");
-  */
 }
 
 void ALPIDEProducer::OnStopRun() {

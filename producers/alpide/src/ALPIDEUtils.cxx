@@ -24,6 +24,7 @@ ALPIDESetup::ALPIDESetup(int id, int debuglevel, TConfig* config,
   , m_raw_data(raw_data)
   , m_last_trigger_id((uint64_t)-1)
   , m_timestamp_reference((uint64_t)-1)
+  , m_timestamp_full((uint64_t)-1)
 {
   //m_last_trigger_id = m_daq_board->GetNextEventId();
   //Print(0, "Starting with last event id: %lu", m_last_trigger_id);
@@ -41,6 +42,7 @@ ALPIDESetup::ALPIDESetup(int id, int debuglevel, std::string configFile,
   , m_raw_data(raw_data)
   , m_last_trigger_id((uint64_t)-1)
   , m_timestamp_reference((uint64_t)-1)
+  , m_timestamp_full((uint64_t)-1)
 {
   if (Configure(configFile) != 0) throw "Failed to configure the Setup";
 }
@@ -49,6 +51,23 @@ ALPIDESetup::ALPIDESetup(int id, int debuglevel, std::string configFile,
 
 ALPIDESetup::~ALPIDESetup() {
   eudaq::mSleep(5000);
+
+  TReadoutBoardDAQ* daq_board = dynamic_cast<TReadoutBoardDAQ*>(m_boards->at(0));
+  switch((unsigned long)m_boardType) {
+  case boardDAQ:
+    daq_board->StartTrigger();
+    eudaq::mSleep(100);
+    daq_board->WriteBusyOverrideReg(true);
+    break;
+  case boardMOSAIC:
+
+    break;
+  case boardRU:
+
+    break;
+  default:
+    return;
+  }
 }
 
 void ALPIDESetup::StartDAQ() {
@@ -56,6 +75,7 @@ void ALPIDESetup::StartDAQ() {
   switch((unsigned long)m_boardType) {
   case boardDAQ:
     daq_board->StartTrigger();
+    eudaq::mSleep(100);
     daq_board->WriteBusyOverrideReg(true);
     break;
   case boardMOSAIC:
@@ -116,6 +136,30 @@ void ALPIDESetup::PrintQueueStatus() {
   Print(0, "Queue status: %lu elements.", m_queue.size());
 }
 
+bool ALPIDESetup::CheckBusy() {
+  TReadoutBoardDAQ* daq_board = dynamic_cast<TReadoutBoardDAQ*>(m_boards->at(0));
+  uint32_t tmp_value = 0;
+  switch((unsigned long)m_boardType) {
+  case boardDAQ:
+    daq_board->ReadRegister((uint16_t)0x207, tmp_value);
+    tmp_value &= 0xFFC000; // keep only bits not transmitted in the header (47:38)
+    m_timestamp_full = (uint64_t)tmp_value << 24;
+    daq_board->ReadRegister((uint16_t)0x307, tmp_value);
+    if ((tmp_value >> 26) & 0x1) return true;
+    break;
+  case boardMOSAIC:
+
+    break;
+  case boardRU:
+
+    break;
+  default:
+    return true;
+  }
+  return true;
+}
+
+
 void ALPIDESetup::Print(int level, const char* text, uint64_t value1,
                          uint64_t value2, uint64_t value3, uint64_t value4) {
   // level:
@@ -157,15 +201,13 @@ int ALPIDESetup::Configure(std::string configFile) {
 
 
 int ALPIDESetup::ReadEvents() {
+  TReadoutBoardDAQ* daq_board = dynamic_cast<TReadoutBoardDAQ*>(m_boards->at(0));
+  uint32_t tmp_value = 0;
   switch((unsigned long)m_boardType) {
   case boardDAQ:
-    /*
-    int address = 0x207;
-    uint32_t tmp_value = 0;
-    m_setups[i]->GetDAQBoard()->ReadRegister(address, &tmp_value);
+    daq_board->ReadRegister((uint16_t)0x207, tmp_value);
     tmp_value &= 0xFFC000; // keep only bits not transmitted in the header (47:38)
-    m_timestamp_full[i] = (uint64_t)tmp_value << 24;
-    */
+    m_timestamp_full = (uint64_t)tmp_value << 24;
     break;
   case boardMOSAIC:
 

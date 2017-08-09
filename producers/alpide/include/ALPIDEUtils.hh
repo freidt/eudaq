@@ -57,6 +57,7 @@ public:
   int GetQueueLength() {
     return m_queue.size();
   }
+  bool CheckBusy();
 
 protected:
   void Print(int level, const char* text, uint64_t value1 = -1,
@@ -79,4 +80,5 @@ protected:
 
   uint64_t m_last_trigger_id;
   uint64_t m_timestamp_reference;
+  uint64_t m_timestamp_full;
 };

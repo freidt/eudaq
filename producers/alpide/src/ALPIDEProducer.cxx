@@ -23,34 +23,6 @@ using eudaq::RawDataEvent;
 
 static const std::string EVENT_TYPE = "ALPIDE";
 
-
-
-// -------------------------------------------------------------------------------------------------
-/*
-bool ALPIDEProducer::ConfigChip(int id, TpAlpidefs* dut,
-                                std::string configFile) {
-
-  // TODO maybe add this functionality to TDAQBoard?
-  char buffer[1000];
-  sprintf(buffer, "Device %d: Reading chip configuration from file %s", id,
-          configFile.data());
-  EUDAQ_INFO(buffer);
-
-  TiXmlDocument doc(configFile.c_str());
-  if (!doc.LoadFile()) {
-    std::string msg = "Unable to open file ";
-    msg += configFile;
-    std::cerr << msg.data() << std::endl;
-    EUDAQ_ERROR(msg.data());
-    SetConnectionState(eudaq::ConnectionState::STATE_ERROR, msg.data());
-    return false;
-  }
-  // TODO return code?
-  ParseXML(dut, doc.FirstChild("root")->ToElement(), -1, -1, false);
-  return true;
-}
-*/
-
 void ALPIDEProducer::OnInitialise(const eudaq::Configuration &init) {
   try {
     std::cout << "Reading: " << init.Name() << std::endl;
@@ -115,11 +87,11 @@ void ALPIDEProducer::OnConfigure(const eudaq::Configuration &param) {
     if (!m_raw_data) {
       m_raw_data = new std::vector<unsigned char>*[m_nSetups];
       for (int i = 0; i < m_nSetups; ++i) {
-      #ifdef DEBUG_USB
+#ifdef DEBUG_USB
         m_raw_data[i] = new std::vector<unsigned char>();
-      #else
+#else
         m_raw_data[i] = 0x0;
-      #endif
+#endif
       }
     }
 
@@ -372,14 +344,6 @@ void ALPIDEProducer::OnStartRun(unsigned param) {
 }
 
 void ALPIDEProducer::OnStopRun() {
-/*
-  std::cout << "Stop Run" << std::endl;
-  {
-    SimpleLock lock(m_mutex);
-    m_running = false;
-    m_stopping = true;
-    m_flushing = true;
-  }
   for (int i = m_nSetups-1; i >= 0; --i) { // stop the event polling loop
 
 #ifdef DEBUG_USB
@@ -394,43 +358,17 @@ void ALPIDEProducer::OnStopRun() {
 #endif
 
     m_setups[i]->StopDAQ();
-    m_setups[i]->SetRunning(false);
-  }
-  std::cout << "Set Running to False completed" << std::endl;
-  SendEOR();
-
-  unsigned long count = 0;
-  bool resetRequired = false;
-  for (int i = 0; i < m_nSetups; ++i) { // wait until all read transactions are done
-    while ((m_setups[i]->IsReading() || m_setups[i]->IsFlushing()) && count < 1000) {
-      if (count++ % 250 == 0) {
-        std::cout << "Reader is still reading, waiting.. " << std::endl;
-      }
-      eudaq::mSleep(20);
-    }
-    if (count==1000) {
-      std::string msg = "Failed to receive the EOT marker!";
-      EUDAQ_ERROR(msg.data());
-      SetConnectionState(eudaq::ConnectionState::STATE_ERROR, msg.data());
-      m_setups[i]->PrintDAQboardStatus();
-      resetRequired = true;
-    }
-  }
-  {
-    SimpleLock lock(m_mutex);
-    m_flushing = false;
   }
 
-  long wait_cnt = 0;
-  eudaq::mSleep(100);
-
-  while (IsStopping()) {
-    eudaq::mSleep(10);
-    ++wait_cnt;
-    if (wait_cnt % 1000 == 0) {
-      std::string msg = "Still stopping...";
-      std::cout << msg << std::endl;
-    }
+  try {
+    SendEvent(eudaq::RawDataEvent::EORE(EVENT_TYPE, m_run, ++m_ev));
+    char msg[100];
+    snprintf(msg, 100, "Sending EOR, Run %d, Event %d", m_run, m_ev);
+    std::cout << msg << std::endl;
+    EUDAQ_INFO(msg);
+  }
+  catch (...) {
+    SetConnectionState(eudaq::ConnectionState::STATE_ERROR, "Stopping Error");
   }
 
   // Control pulser for continuous integration testing
@@ -450,51 +388,38 @@ void ALPIDEProducer::OnStopRun() {
     }
   }
 
-  if (resetRequired) {
-    for (int i = m_nSetups-1; i >= 0; --i) { // stop the event polling loop
-      m_setups[i]->StopDAQ();
-      m_setups[i]->SetRunning(false);
-    }
-    eudaq::mSleep(1000);
-    PowerOffTestALPIDESetup();
-  }
+  if (m_connectionstate.GetState() != eudaq::ConnectionState::STATE_ERROR)
+    SetConnectionState(eudaq::ConnectionState::STATE_CONF);
 
-  SetConnectionState(eudaq::ConnectionState::STATE_UNCONF, "Run Stopped");
-  */
+  if (m_setups) {
+    for (int i = m_nSetups-1; i >= 0; --i) { // destroy the setups
+      delete m_setups[i];
+      m_setups[i] = 0x0;
+    }
+    delete[] m_setups;
+  }
 }
 
 void ALPIDEProducer::OnTerminate() {
-/*
-  std::cout << "Terminate" << std::endl;
-  PowerOffTestALPIDESetup();
-  std::cout << "All boards powered off" << std::endl;
-  {
-    SimpleLock lock(m_mutex);
-    m_done = true;
-  }
-*/
+  std::cout << "Terminating" << std::endl;
+  m_done = true;
 }
 
 void ALPIDEProducer::OnReset() {
-/*
   std::cout << "Reset" << std::endl;
   SetConnectionState(eudaq::ConnectionState::STATE_UNCONF, "Reset");
-*/
 }
 
 void ALPIDEProducer::OnUnrecognised(const std::string &cmd,
-                                       const std::string &param) {
-/*
+                                    const std::string &param) {
   std::cout << "Unrecognised: (" << cmd.length() << ") " << cmd;
   if (param.length() > 0)
     std::cout << " (" << param << ")";
   std::cout << std::endl;
   SetConnectionState(eudaq::ConnectionState::STATE_ERROR, "Error");
-*/
 }
 
 void ALPIDEProducer::Loop() {
-/*
   unsigned long count = 0;
   unsigned long reconfigure_count = 0;
   unsigned long busy_count = 0;
@@ -511,67 +436,43 @@ void ALPIDEProducer::Loop() {
       while (1) {}
     }
 
-    if (!IsRunning()) {
+    if (!m_running) {
       count = 0;
       reconfigure_count = 0;
       reconfigure = false;
     }
     // build events
-    while (IsRunning()) {
+    while (m_running) {
       int events_built = BuildEvent();
       count += events_built;
 
       if (events_built > 0) {
         reconfigure_count = 0;
-	out_of_sync_count = 0;
+        out_of_sync_count = 0;
       }
       else if (events_built == -1) { // auto-of-sync, which won't be recovered
         reconfigure = true;
         break;
       }
       else if (events_built == 0 || events_built == -2) {
-	if (events_built == -2) {
-	  ++out_of_sync_count;
-	}
+        if (events_built == -2) {
+          ++out_of_sync_count;
+        }
         if (m_status_interval > 0 &&
             time(0) - last_status > m_status_interval) {
-          if (IsRunning()) {
+          if (m_running) {
             SendStatusEvent();
             uint32_t tmp_value = 0;
             uint64_t timestamp = 0;
             int address = 0x207; // timestamp upper 24bit
             bool found_busy = false;
             for (int i = 0; i < m_nSetups; ++i) {
-              if (m_debuglevel > 3){
-                std::cout << "Reader " << i << ":" << std::endl;
-                m_setups[i]->PrintDAQboardStatus();
-              }
-
-              // read the timestamp
-              address = 0x207; // upper 24bit
-              m_setups[i]->GetDAQBoard()->ReadRegister(address, &tmp_value);
-              timestamp = (tmp_value & 0xFFFFFF) << 24;
-              tmp_value &= 0xFFC000; // keep only bits not transmitted in the header (47:38)
-              m_timestamp_full[i] = (m_chip_type[i] >= 3) ? (uint64_t)tmp_value << 24 : 0x0;
-
-              address = 0x206; // lower 24bit
-              m_setups[i]->GetDAQBoard()->ReadRegister(address, &tmp_value);
-              timestamp |= (tmp_value & 0xFFFFFF);
-
-
               // check busy status
-              address = 0x307;
-              m_setups[i]->GetDAQBoard()->ReadRegister(address, &tmp_value);
-              if ((tmp_value >> 26) & 0x1) found_busy = true;
+              if (m_setups[i]->CheckBusy())
+                found_busy = true;
               if (found_busy) { // busy
                 std::cout << "DAQ board " << i << " is busy." << std::endl;
               }
-
-              // read the trigger counter
-              address = 0x202; // event ID lower 24bit
-              m_setups[i]->GetDAQBoard()->ReadRegister(address, &tmp_value);
-              std::cout << "Event ID " << i << ": 0x" << std::hex << tmp_value
-                        << "\tTimestamp: 0x" << timestamp << std::dec << std::endl;
             }
             if (found_busy) ++busy_count;
           }
@@ -586,12 +487,11 @@ void ALPIDEProducer::Loop() {
           int diff = queueLengths[queueLengths.size()-1] - queueLengths[0];
           if (diff > 1000) {
             std::cout << "Queue difference: " << diff << std::endl;
-            std::string str = "DAQ boards queues differ by more than 1000 events";
+            std::string str = "Queues differ by more than 1000 events";
             EUDAQ_ERROR(str);
-            //SetConnectionState(eudaq::ConnectionState::STATE_ERROR, str);
             for (int i = 0; i < m_nSetups; ++i) {
               std::cout << "Reader " << i << ":" << std::endl;
-              m_setups[i]->PrintDAQboardStatus();
+              m_setups[i]->PrintStatus();
               reconfigure = true;
             }
           }
@@ -607,10 +507,9 @@ void ALPIDEProducer::Loop() {
     if (busy_count>5) {
       std::string str = "DAQ boards stay busy";
       EUDAQ_ERROR(str);
-      //SetConnectionState(eudaq::ConnectionState::STATE_ERROR, str);
       for (int i = 0; i < m_nSetups; ++i) {
         std::cout << "Reader " << i << ":" << std::endl;
-        m_setups[i]->PrintDAQboardStatus();
+        m_setups[i]->PrintStatus();
       }
       busy_count = 0;
       reconfigure = true;
@@ -618,10 +517,9 @@ void ALPIDEProducer::Loop() {
     if (out_of_sync_count>10) {
       std::string str = "Out-of-sync recovery fails";
       EUDAQ_ERROR(str);
-      //SetConnectionState(eudaq::ConnectionState::STATE_ERROR, str);
       for (int i = 0; i < m_nSetups; ++i) {
         std::cout << "Reader " << i << ":" << std::endl;
-        m_setups[i]->PrintDAQboardStatus();
+        m_setups[i]->PrintStatus();
       }
       out_of_sync_count = 0;
       reconfigure = true;
@@ -630,7 +528,6 @@ void ALPIDEProducer::Loop() {
     if (reconfigure) {
       std::string msg = "Reconfiguring ...";
       std::cout << msg << std::endl;
-      //SetStatus(eudaq::Status::LVL_WARN, msg.data());
       EUDAQ_WARN(msg);
       for (int i = 0; i < m_nSetups; ++i) { // stop the event polling loop
         m_setups[i]->StopDAQ();
@@ -639,8 +536,6 @@ void ALPIDEProducer::Loop() {
         SimpleLock lock(m_mutex);
         m_running = false;
       }
-      // power down
-      PowerOffTestALPIDESetup();
 
       // re-run configuration
       OnConfigure(m_param);
@@ -657,7 +552,6 @@ void ALPIDEProducer::Loop() {
         m_running = true;
       }
       for (int i = 0; i < m_nSetups; ++i) {
-        m_setups[i]->SetRunning(true);
         m_setups[i]->StartDAQ();
       }
       EUDAQ_INFO("Reconfiguration done.");
@@ -666,8 +560,7 @@ void ALPIDEProducer::Loop() {
       EUDAQ_INFO("Running");
       reconfigure = false;
     }
-  } while (!IsDone());
-  */
+  } while (!m_done);
 }
 
 int ALPIDEProducer::BuildEvent() {
@@ -676,7 +569,7 @@ int ALPIDEProducer::BuildEvent() {
   // - -1 for an out-of-sync which is not recovered
   // - -2 for an out-of-sync recovery attempt
 
-  /*
+
   if (m_debuglevel > 3)
     std::cout << "BuildEvent..." << std::endl;
 
@@ -688,7 +581,6 @@ int ALPIDEProducer::BuildEvent() {
   // flush)
   uint64_t trigger_id = ULONG_MAX;
   int64_t timestamp = LONG_MAX;
-
   int64_t timestamp_mask = 0xFFFFFFFFFFFF;//0x7FFFFFFF;
 
   // local copies
@@ -705,7 +597,8 @@ int ALPIDEProducer::BuildEvent() {
   }
 
   for (int i = 0; i < m_nSetups; ++i) {
-    int64_t timestamp_tmp = ((int64_t)m_next_event[i]->m_timestamp | (int64_t)m_timestamp_full[i])-(int64_t)m_next_event[i]->m_timestamp_reference;
+    int64_t timestamp_tmp =
+      (int64_t)m_next_event[i]->m_timestamp-(int64_t)m_next_event[i]->m_timestamp_reference;
     timestamp_tmp &= timestamp_mask;
 
     //std::cout << i << '\t' << m_next_event[i]->m_timestamp << '\t' << m_timestamp_full[i] << '\t' << m_next_event[i]->m_timestamp_reference << '\t' << timestamp_tmp << std::endl;
@@ -789,7 +682,6 @@ int ALPIDEProducer::BuildEvent() {
       sprintf(msg, "Event %d. Out of sync", m_ev);
       std::string str(msg);
       if (m_oos_ev>5) {
-        //SetStatus(eudaq::Status::LVL_WARN, str);
         EUDAQ_WARN(str);
       }
       else  {
@@ -882,8 +774,7 @@ int ALPIDEProducer::BuildEvent() {
 
   RawDataEvent ev(EVENT_TYPE, m_run, m_ev++);
   ev.AddBlock(0, buffer, total_size);
-  if (IsRunning())
-    SendEvent(ev);
+  SendEvent(ev);
   delete[] buffer;
   m_firstevent = false;
 
@@ -896,36 +787,17 @@ int ALPIDEProducer::BuildEvent() {
   }
 
   return 1;
-  */
-}
-
-void ALPIDEProducer::SendEOR() {
-  /*
-  char msg[100];
-  snprintf(msg, 100, "Sending EOR, Run %d, Event %d", m_run, m_ev);
-  std::cout << msg << std::endl;
-  EUDAQ_INFO(msg);
-  SendEvent(RawDataEvent::EORE(EVENT_TYPE, m_run, m_ev++));
-  {
-    SimpleLock lock(m_mutex);
-    m_stopping = false;
-  }
-  */
 }
 
 void ALPIDEProducer::SendStatusEvent() {
-  /*
   std::cout << "Sending status event" << std::endl;
   // temperature readout
   RawDataEvent ev(EVENT_TYPE, m_run, m_ev++);
   ev.SetTag("pALPIDEfs_Type", 1);
   for (int i = 0; i < m_nSetups; ++i) {
-    float temp = m_setups[i]->GetTemperature();
-    ev.AddBlock(i, &temp, sizeof(float));
+
   }
-  if (IsRunning())
-    SendEvent(ev);
-  */
+  SendEvent(ev);
 }
 
 void ALPIDEProducer::PrintQueueStatus() {
@@ -952,7 +824,7 @@ int main(int /*argc*/, const char** argv) {
     op.Parse(argv);
     EUDAQ_LOG_LEVEL(level.Value());
     ALPIDEProducer producer(name.Value(), rctrl.Value(),
-                               debug_level.Value());
+                            debug_level.Value());
     producer.Loop();
     std::cout << "Quitting" << std::endl;
   } catch (...) {

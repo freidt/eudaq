@@ -40,7 +40,6 @@ protected:
   void ControlLinearStage(const eudaq::Configuration &param);
   void ControlRotaryStages(const eudaq::Configuration &param);
   void ConfigurePulser(const eudaq::Configuration &param);
-  //bool ConfigChip(int id, TpAlpidefs *dut, std::string configFile);
   int BuildEvent();
   void SendEOR();
   void SendStatusEvent();
@@ -59,7 +58,6 @@ protected:
   ALPIDESetup** m_setups;
   SingleEvent** m_next_event;
   int m_debuglevel;
-
 
   std::mutex m_mutex;
 

@@ -123,8 +123,11 @@ void ParseXML(TpAlpidefs* dut, TiXmlNode* node, int base, int rgn,
         int valuecompare = -1;
         if (dut->ReadRegister(address, &valuecompare) != 1)
           std::cout << "Failure to read chip address after writing chip address " << address << std::endl;
-        if (address != 14 && value != valuecompare)
-          std::cout << "Register 0x" << std::hex << address << std::dec << "read back error : write value is : " << value << " and read value is : "<< valuecompare << std::endl;
+        if (address == 0x14) value &= 0xFF; // mask the read-only part of th ALPIDE DTU configuration register
+        if (value != valuecompare)
+          std::cout << "Register 0x" << std::hex << address << std::dec
+                    << " read back error : write value is : " << value << " ( 0x" << std::hex << value << std::dec
+                    << ") and read value is : " << valuecompare << " ( 0x" << std::hex << valuecompare << std::dec << ")" << std::endl;
 
       }
     }
